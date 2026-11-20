@@ -7,6 +7,7 @@ var Settings = {
   },
   str: function (key) { return String(Settings.raw(key)); },
   int: function (key) { var n = parseInt(Settings.raw(key), 10); return isNaN(n) ? parseInt(DEFAULT_SETTINGS[key][0], 10) : n; },
+  num: function (key) { var n = parseFloat(Settings.raw(key)); return isNaN(n) ? parseFloat(DEFAULT_SETTINGS[key][0]) : n; },
   bool: function (key) { return String(Settings.raw(key)).toLowerCase() === 'true'; },
   list: function (key) { return toList(Settings.raw(key)); },
 
@@ -27,6 +28,9 @@ var Settings = {
     switch (def[1]) {
       case 'int':
         if (!/^\d{1,6}$/.test(v)) failFields({ value: 'Enter a whole number' });
+        break;
+      case 'num':
+        if (!/^\d{1,4}(\.\d{1,4})?$/.test(v)) failFields({ value: 'Enter a number, for example 0.45' });
         break;
       case 'bool':
         v = v.toLowerCase();

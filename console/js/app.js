@@ -5,6 +5,7 @@ import { state, loadBoot, isAdmin, go } from './state.js';
 import { staffList, staffNew, staffDetail, staffImport } from './staff.js';
 import { companiesList, companyNew, companyDetail } from './companies.js';
 import { departmentsView, usersView, settingsView, auditView } from './admin.js';
+import { tabletView, punchesView, unrecognisedView } from './kiosk-admin.js';
 
 const OSC = window.OSC;
 const FOOTER = 'Designed and developed by IT Department, Marengo Asia Hospital, Surat';
@@ -15,9 +16,10 @@ const NAV = [
   { href: '#/staff', icon: 'users', label: 'Staff' },
   { href: '#/companies', icon: 'building-2', label: 'Companies & rates' },
   { soon: true, icon: 'triangle-alert', label: 'Exceptions' },
-  { soon: true, icon: 'clock', label: 'Duties & punches' },
-  { soon: true, icon: 'file-text', label: 'Month-end pack' },
-  { soon: true, icon: 'tablet-smartphone', label: 'Tablet' }
+  { href: '#/punches', icon: 'clock', label: 'Punches' },
+  { href: '#/unrecognised', icon: 'scan-face', label: 'Unrecognised faces' },
+  { href: '#/tablet', icon: 'tablet-smartphone', label: 'Tablet' },
+  { soon: true, icon: 'file-text', label: 'Month-end pack' }
 ];
 const ADMIN_NAV = [
   { href: '#/departments', icon: 'layers', label: 'Departments' },
@@ -156,7 +158,7 @@ async function homeView(c) {
         <div class="bar"><i style="width:${Math.min(100, req ? Math.round(n / req * 100) : 0)}%"></i></div>
         <div class="row" style="color:var(--muted);font-size:12px"><span>Required per day: ${d.reqDay} Day + ${d.reqNight} Night</span><span class="sp"></span><span>Next ID ${esc(OSC.staffId(d.code, d.nextSeq || 1))}</span></div></div>`;
     }).join('')}</div>
-    <div class="note">${icon('clock')}<span>Live attendance, the tablet and billing are added in the next phases. This build (Phase 1) covers staff, companies, rates, users and settings.</span></div>`;
+    <div class="note">${icon('clock')}<span>Live attendance, the tablet and billing are added in the next phases. This build (Phase 2) adds the tablet: face enrollment, punching, punches list and unrecognised faces.</span></div>`;
 }
 
 function moreView(c) {
@@ -179,6 +181,9 @@ const ROUTES = [
   [/^#\/settings$/, settingsView, true],
   [/^#\/audit$/, auditView, true],
   [/^#\/more$/, moreView, true],
+  [/^#\/tablet$/, tabletView],
+  [/^#\/punches$/, punchesView],
+  [/^#\/unrecognised$/, unrecognisedView],
   [/^#\/password$/, () => changePasswordView(false)]
 ];
 async function route() {

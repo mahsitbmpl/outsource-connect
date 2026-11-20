@@ -2,6 +2,7 @@
 import { api } from './api.js';
 import { esc, icon, toast, dialog, field, formData, showErrors, clearErrors, setBusy, skeleton, emptyState, initials, toCSV, download, parseCSV, setTitle, debounce, $, $$ } from './ui.js';
 import { state, go, deptName, today } from './state.js';
+import { startEnroll } from './kiosk-admin.js';
 
 const OSC = window.OSC;
 const filt = { q: '', dept: '', status: 'Active', face: '' };
@@ -132,13 +133,14 @@ export async function staffDetail(c, id) {
   c.innerHTML = `
     <div class="row"><a class="btn link" href="#/staff">${icon('chevron-left')}All staff</a></div>
     <div class="card"><div class="row" style="gap:16px">
-      <span class="av" style="width:56px;height:56px;font-size:18px">${esc(initials(s.fullName))}</span>
+      <span class="av" id="thumb" style="width:56px;height:56px;font-size:18px;overflow:hidden">${esc(initials(s.fullName))}</span>
       <div><h2 style="font-size:22px">${esc(s.displayName)}</h2><div class="tnum" style="color:var(--muted)">${esc(s.staffId)} · ${esc(s.deptName)} · ${esc(s.designation)}</div></div>
       <span class="sp"></span>${statusPill(s.status)} ${facePill(s.faceStatus)}
     </div>
     <div class="row" style="margin-top:16px">
       ${s.status === 'Active' ? `<button class="btn ghost" id="bEdit">${icon('pencil')}Edit</button><button class="btn ghost" id="bMove">${icon('arrow-left-right')}Transfer</button><button class="btn ghost" id="bExit">${icon('user-x')}Mark exit</button>
-        <button class="btn ghost" disabled title="Face enrollment arrives in Phase 2">${icon('scan-face')}Enroll face</button>`
+        ${s.faceStatus === 'Active' ? `<button class="btn ghost" id="bSample">${icon('scan-face')}Add another sample</button><button class="btn ghost" id="bEnroll">${icon('scan-face')}Re-enroll</button>`
+          : `<button class="btn primary" id="bEnroll">${icon('scan-face')}Enroll face</button>`}`
         : `<button class="btn ghost" id="bEdit">${icon('pencil')}Edit</button><button class="btn primary" id="bRejoin">${icon('user-check')}Re-join</button>`}
     </div></div>
     <div class="grid g2">
@@ -160,6 +162,10 @@ export async function staffDetail(c, id) {
       ${audit.map((a) => `<tr><td class="tnum nw">${esc(OSC.fmtDateTime(a.at))}</td><td>${esc(a.username)}</td><td>${esc(a.action)}</td><td>${esc(a.reason)}</td></tr>`).join('')}</tbody></table></div>` : emptyState('history', 'No changes yet')}</div>`;
 
   const reload = () => staffDetail(c, id);
+  api('face.thumb', { staffId: id }).then((r) => { const el = document.getElementById('thumb'); if (r.thumb && el) el.innerHTML = `<img src="${esc(r.thumb)}" alt="" style="width:100%;height:100%;object-fit:cover">`; }).catch(() => {});
+  const ben = $('#bEnroll'), bsa = $('#bSample');
+  if (ben) ben.onclick = () => startEnroll(s, 'enroll', reload);
+  if (bsa) bsa.onclick = () => startEnroll(s, 'sample', reload);
   const be = $('#bEdit');
   if (be) be.onclick = async () => {
     const r = await dialog({

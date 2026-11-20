@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#050608">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self' blob: mediastream:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; worker-src 'self' blob:; base-uri 'self'; form-action 'none'">
+<title>OutSource Connect Kiosk</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="stylesheet" href="css/kiosk.css">
+</head>
+<body data-mode="loading">
+<video id="cam" playsinline muted autoplay aria-hidden="true"></video>
+<main id="app" aria-live="polite"></main>
+<script src="config.js"></script>
+<script src="js/osc-core.js"></script>
+<script src="js/logic.js"></script>
+<script src="vendor/face-api-1.7.15.js"></script>
+<script type="module" src="js/kiosk.js"></script>
+</body>
+</html>

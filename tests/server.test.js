@@ -38,7 +38,7 @@ test('PBKDF2 implementation matches Node crypto (RFC 8018)', () => {
   const node = crypto.pbkdf2Sync('correct horse', Buffer.from(salt), 1000, 32, 'sha256').toString('hex');
   assert.equal(ours, node);
   const h = env.ctx.Auth.hashPassword('Secret12345');
-  assert.match(h, /^pbkdf2-sha256\$2000\$/);
+  assert.match(h, /^pbkdf2-sha256\$1000\$/);
   assert.equal(env.ctx.Auth.verifyPassword('Secret12345', h), true);
   assert.equal(env.ctx.Auth.verifyPassword('Secret12346', h), false);
 });
@@ -277,4 +277,14 @@ test('Date objects coming back from Sheets are read as IST dates', () => {
   env.sheet('Staff').rows[1][8] = new Date('2026-11-01T00:00:00+05:30');
   env.ctx.Db.invalidate('Staff');
   assert.equal(ok(env.call('staff.get', { staffId: 'HK001' }, env.admin)).joinDate, '2026-11-01');
+});
+
+test('older 2000-round password hashes still work and are re-made with the current rounds at sign-in', () => {
+  const env = ready();
+  const old = env.ctx.Auth.hashPassword('Legacy2026pass', 2000);
+  env.ctx.Db.update('Users', 'admin', { pwHash: old });
+  ok(env.call('auth.login', { username: 'admin', password: 'Legacy2026pass' }));
+  env.ctx.Db.reset();
+  assert.match(env.ctx.Db.find('Users', 'admin').pwHash, /^pbkdf2-sha256\$1000\$/);
+  ok(env.call('auth.login', { username: 'admin', password: 'Legacy2026pass' }));
 });

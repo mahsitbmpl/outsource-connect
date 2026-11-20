@@ -1,7 +1,7 @@
 /* ===== 00 Config: app constants and sheet schema ===== */
 var APP = {
   name: 'OutSource Connect',
-  version: '1.0.0-phase1',
+  version: '2.0.0-phase2',
   tz: 'Asia/Kolkata',
   roles: { ADMIN: 'ADMIN', OPS: 'OPS' }
 };
@@ -22,7 +22,15 @@ var SCHEMA = {
   Sessions: { key: 'sid', cols: [['sid', 'str'], ['username', 'str'], ['createdAt', 'datetime'], ['expiresAt', 'datetime'], ['lastSeenAt', 'datetime'], ['revoked', 'bool'], ['userAgent', 'str']] },
   LoginLog: { log: true, cols: [['at', 'datetime'], ['username', 'str'], ['result', 'str'], ['detail', 'str'], ['userAgent', 'str']] },
   AuditLog: { log: true, cols: [['auditId', 'str'], ['at', 'datetime'], ['username', 'str'], ['action', 'str'], ['entity', 'str'], ['entityId', 'str'], ['reason', 'str'], ['before', 'json'], ['after', 'json']] },
-  MonthLocks: { key: 'lockId', cols: [['lockId', 'str'], ['month', 'str'], ['deptCode', 'str'], ['status', 'str'], ['lockedAt', 'datetime'], ['lockedBy', 'str'], ['unlockedAt', 'datetime'], ['unlockedBy', 'str'], ['unlockReason', 'str']] }
+  MonthLocks: { key: 'lockId', cols: [['lockId', 'str'], ['month', 'str'], ['deptCode', 'str'], ['status', 'str'], ['lockedAt', 'datetime'], ['lockedBy', 'str'], ['unlockedAt', 'datetime'], ['unlockedBy', 'str'], ['unlockReason', 'str']] },
+  // ----- Phase 2: tablet, faces, punches -----
+  Devices: { key: 'deviceId', cols: [['deviceId', 'str'], ['name', 'str'], ['active', 'bool'], ['createdAt', 'datetime'], ['createdBy', 'str'], ['revokedAt', 'datetime'], ['revokedBy', 'str'], ['lastSeenAt', 'datetime'], ['appVersion', 'str'], ['battery', 'num'], ['charging', 'bool'], ['queueSize', 'num'], ['cameraOk', 'bool'], ['lastPunchAt', 'datetime'], ['backend', 'str'], ['userAgent', 'str']] },
+  Heartbeats: { log: true, cols: [['at', 'datetime'], ['deviceId', 'str'], ['battery', 'num'], ['charging', 'bool'], ['queueSize', 'num'], ['cameraOk', 'bool'], ['appVersion', 'str'], ['note', 'str']] },
+  EnrollRequests: { key: 'reqId', cols: [['reqId', 'str'], ['staffId', 'str'], ['mode', 'str'], ['status', 'str'], ['requestedBy', 'str'], ['requestedAt', 'datetime'], ['updatedAt', 'datetime'], ['deviceId', 'str'], ['message', 'str']] },
+  FaceData: { key: 'faceId', cols: [['faceId', 'str'], ['staffId', 'str'], ['descriptors', 'json'], ['samples', 'num'], ['quality', 'json'], ['source', 'str'], ['status', 'str'], ['reqId', 'str'], ['createdAt', 'datetime'], ['activatedAt', 'datetime'], ['disabledAt', 'datetime'], ['note', 'str']] },
+  FaceThumbs: { key: 'staffId', cols: [['staffId', 'str'], ['thumb', 'str'], ['updatedAt', 'datetime']] },
+  StaffState: { key: 'staffId', cols: [['staffId', 'str'], ['lastPunchId', 'str'], ['lastType', 'str'], ['lastAt', 'datetime']] },
+  UnrecognisedFaces: { key: 'unrecId', cols: [['unrecId', 'str'], ['at', 'datetime'], ['deviceId', 'str'], ['photoFileId', 'str'], ['bestStaffId', 'str'], ['bestDistance', 'num'], ['status', 'str'], ['resolvedBy', 'str'], ['resolvedAt', 'datetime'], ['note', 'str']] }
 };
 
 /* Default settings: key -> [value, type, description]. setup() adds missing keys only. */
@@ -47,7 +55,13 @@ var DEFAULT_SETTINGS = {
   passwordMinLength: ['10', 'int', 'Minimum password length'],
   tabletSilentAlertMinutes: ['15', 'int', 'Alert when the tablet is silent this long'],
   tabletLowBatteryPct: ['20', 'int', 'Alert when battery is below this % and not charging'],
-  kioskReloadTime: ['03:30', 'time', 'Daily quiet reload time on the tablet']
+  kioskReloadTime: ['03:30', 'time', 'Daily quiet reload time on the tablet'],
+  faceMatchThreshold: ['0.45', 'num', 'Face match strictness: lower = stricter (0.35 to 0.55)'],
+  faceMatchMargin: ['0.06', 'num', 'Minimum gap between the best and second-best person'],
+  livenessEnabled: ['true', 'bool', 'Ask for a blink or small head turn before punching'],
+  duplicateWindowMin: ['3', 'int', 'Ignore a second punch by the same person within these minutes'],
+  kioskNewInAfterHours: ['36', 'int', 'If the last IN is older than this, the next punch is a new IN (forgotten OUT)'],
+  kioskMinFacePct: ['16', 'int', 'Face must be at least this % of the camera width (ignores people behind)']
 };
 
 var DEFAULT_DEPARTMENTS = [
@@ -56,5 +70,14 @@ var DEFAULT_DEPARTMENTS = [
   { code: 'SC', name: 'Security', reqDay: 6, reqNight: 4, sortOrder: 3 }
 ];
 
-var PBKDF2_ITERATIONS = 2000; // stored inside each hash, so it can be raised later without breaking old passwords
-var CACHED_TABLES = ['Settings', 'Departments', 'Companies', 'Rates', 'Staff', 'Users', 'MonthLocks'];
+var PBKDF2_ITERATIONS = 1000; // stored inside each hash; older hashes are re-made with this value at the next sign-in
+var CACHED_TABLES = ['Settings', 'Departments', 'Companies', 'Rates', 'Staff', 'Users', 'MonthLocks', 'Devices'];
+
+/* Punches live in one tab per year (Punches_2026, Punches_2027 ...). Rows are never edited or deleted. */
+var PUNCH_COLS = [['punchId', 'str'], ['staffId', 'str'], ['type', 'str'], ['at', 'datetime'], ['deviceTime', 'datetime'], ['receivedAt', 'datetime'], ['deviceId', 'str'], ['distance', 'num'], ['liveness', 'str'], ['offline', 'bool'], ['status', 'str'], ['photoFileId', 'str'], ['note', 'str']];
+function punchTable(year) {
+  var n = 'Punches_' + year;
+  if (!SCHEMA[n]) SCHEMA[n] = { key: 'punchId', log: true, cols: PUNCH_COLS };
+  return n;
+}
+punchTable(new Date(Date.now() + 19800000).getUTCFullYear());

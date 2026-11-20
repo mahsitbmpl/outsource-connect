@@ -62,6 +62,7 @@ function handle(body) {
   if (!route) fail('BAD_REQUEST', 'Unknown action ' + req.action);
   var data = req.data && typeof req.data === 'object' ? req.data : {};
   if (route[0] === '*') return route[1](null, data);
+  if (route[0] === 'DEVICE') { var dev = Devices.verify(req); return route[1](dev, Devices.payload(req)); }
   var user = Auth.check(req.token);
   // A user with a temporary password may only change it or sign out.
   if (user.mustChange && ['auth.changePassword', 'auth.logout', 'auth.me'].indexOf(req.action) < 0)

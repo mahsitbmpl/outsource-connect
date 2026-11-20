@@ -64,7 +64,13 @@ function makeEnv(opts) {
   const props = new Map();
   const folders = new Map();
   let folderSeq = 0;
-  const makeFolder = (name) => { const id = 'F' + (++folderSeq); const f = { name, getId: () => id, createFolder: (n) => makeFolder(n) }; folders.set(id, f); return f; };
+  const files = new Map();
+  const makeFolder = (name) => {
+    const id = 'F' + (++folderSeq);
+    const f = { name, files: [], getId: () => id, createFolder: (n) => makeFolder(n),
+      createFile: (blob) => { const fid = 'FILE' + (files.size + 1); files.set(fid, blob); f.files.push(fid); return { getId: () => fid }; } };
+    folders.set(id, f); return f;
+  };
 
   const sandbox = {
     console: opts.quiet === false ? console : { log() {}, error() {}, warn() {} },
@@ -85,8 +91,9 @@ function makeEnv(opts) {
       })
     },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => props.set(k, String(v)) }) },
-    DriveApp: { createFolder: (n) => makeFolder(n), getFolderById: (id) => { if (!folders.has(id)) throw new Error('no folder'); return folders.get(id); } },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => props.set(k, String(v)), deleteProperty: (k) => props.delete(k) }) },
+    DriveApp: { createFolder: (n) => makeFolder(n), getFolderById: (id) => { if (!folders.has(id)) throw new Error('no folder'); return folders.get(id); },
+      getFileById: (id) => { if (!files.has(id)) throw new Error('no file'); const b = files.get(id); return { getBlob: () => b }; } },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (s) => ({ content: s, setMimeType() { return this; } }) },
     Utilities: {
       getUuid: () => crypto.randomUUID(),
@@ -96,7 +103,9 @@ function makeEnv(opts) {
       computeHmacSha256Signature: (value, key) => toSigned(crypto.createHmac('sha256', toBuf(key)).update(toBuf(value)).digest()),
       base64EncodeWebSafe: (bytes) => toBuf(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
       base64DecodeWebSafe: (s) => toSigned(Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
-      newBlob: (s) => ({ getBytes: () => toSigned(Buffer.from(String(s), 'utf8')) })
+      newBlob: (s, mime, name) => ({ mime, name, getBytes: () => (Array.isArray(s) ? s.slice() : toSigned(Buffer.from(String(s), 'utf8'))) }),
+      base64Decode: (s) => toSigned(Buffer.from(s, 'base64')),
+      base64Encode: (bytes) => toBuf(bytes).toString('base64')
     },
     Date, Math, JSON, Object, Array, String, Number, Boolean, RegExp, Error, isFinite, isNaN, parseInt, parseFloat
   };
@@ -108,7 +117,7 @@ function makeEnv(opts) {
   vm.runInContext('Clock.nowMs = function () { return __now(); };', Object.assign(ctx, { __now: () => now }));
 
   const env = {
-    ctx, book, alerts, cacheStore, props,
+    ctx, book, alerts, cacheStore, props, files, folders,
     setNow: (iso) => { now = Date.parse(iso); },
     advanceMinutes: (m) => { now += m * 60000; },
     /** Call the HTTP API exactly like the console does. */

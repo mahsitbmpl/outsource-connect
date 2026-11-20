@@ -62,7 +62,9 @@ var Auth = (function () {
         if (patch.lockedUntil) fail('LOCKED', 'Too many wrong passwords. The account is locked for ' + Settings.int('lockoutMinutes') + ' minutes.');
         fail('AUTH', 'Wrong username or password');
       }
-      Db.update('Users', username, { failedCount: 0, lockedUntil: '', lastLoginAt: Clock.now() });
+      var okPatch = { failedCount: 0, lockedUntil: '', lastLoginAt: Clock.now() };
+      if (String(u.pwHash).split('$')[1] !== String(PBKDF2_ITERATIONS)) okPatch.pwHash = hashPassword(password); // upgrade/downgrade rounds
+      Db.update('Users', username, okPatch);
       var token = bytesToB64(randomBytes(32));
       var sid = sha256Hex(token);
       var sess = { sid: sid, username: username, createdAt: Clock.now(), expiresAt: isoPlusMinutes(Settings.int('sessionHours') * 60), lastSeenAt: Clock.now(), revoked: false, userAgent: ua };

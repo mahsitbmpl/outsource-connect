@@ -19,5 +19,14 @@ fs.mkdirSync(path.join(root, 'apps-script/dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'apps-script/dist/Code.gs'), header + '\n/* ----- shared/osc-core.js ----- */\n' + core + parts.join('\n'));
 fs.copyFileSync(path.join(root, 'apps-script/appsscript.json'), path.join(root, 'apps-script/dist/appsscript.json'));
 fs.copyFileSync(path.join(root, 'shared/osc-core.js'), path.join(root, 'console/js/osc-core.js'));
+fs.copyFileSync(path.join(root, 'shared/osc-core.js'), path.join(root, 'kiosk/js/osc-core.js'));
 const lines = fs.readFileSync(path.join(root, 'apps-script/dist/Code.gs'), 'utf8').split('\n').length;
 console.log('Built apps-script/dist/Code.gs (' + lines + ' lines) and console/js/osc-core.js');
+
+// Kiosk offline file list: every file under kiosk/ (except sw.js and licence texts) is pre-cached.
+const kdir = path.join(root, 'kiosk');
+const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.relative(kdir, path.join(d, e.name)).split(path.sep).join('/')]);
+const kfiles = walk(kdir).filter((f) => f !== 'sw.js' && !/\.(LICENSE|txt)$/.test(f)).sort();
+const swPath = path.join(kdir, 'sw.js');
+fs.writeFileSync(swPath, fs.readFileSync(swPath, 'utf8').replace(/const FILES = \[[\s\S]*?\];/, 'const FILES = [\n' + kfiles.map((f) => "  '" + f + "'").join(',\n') + '\n];'));
+console.log('Kiosk offline cache: ' + kfiles.length + ' files');
