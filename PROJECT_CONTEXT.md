@@ -150,6 +150,13 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Tests:** tests/core.test.js + tests/server.test.js (26 tests, node --test; server tests run the real dist/Code.gs inside tests/gas-mock.js), tests/e2e_console.py (Playwright walkthrough via tools/dev-server.js). All green on 20-Nov-2026.
 **Deviations from brief:** SheetJS not used (vendor CDN blocked) → read-excel-file 5.8.6 for .xlsx import. Lockout auto-expires after 30 min (setting) as well as Admin unlock.
 
+## 16. v2.2.0 navigation speed (20-Nov-2026)
+- Owner: password check now 9 ms (create 26 ms) at 2,000 rounds; page changes took 5–7 s.
+- Console `apiFast` (api.js): read actions remembered in memory; a page shows remembered data at once, refreshes in the background, redraws only if data changed (not while typing or with a dialog open). Any successful write clears the memory. After sign-in, staff, companies, tablets, today's punches and unrecognised faces are pre-loaded.
+- Server Db.ss(): getActiveSpreadsheet() first (script is bound to the Sheet), openById only as fallback.
+- Measured with a simulated 1.5 s server: warmed pages 0.07–0.09 s, first visit to an unwarmed page ≈ 1.9 s, revisit 0.06 s.
+- Remaining time on a first visit is Google's web-app start-up plus network; the user-menu timing line separates it from our code.
+
 ## 15. v2.1.0 speed fix (20-Nov-2026)
 - Owner measured 1,560 ms (hash + check, 1,000 rounds) after v2.0; v1 was 2,112 ms at 2,000 rounds → ~1 s fixed cost + ~0.28 ms per Utilities.computeHmacSha256Signature call.
 - New apps-script/src/01b_sha256.js `FastHash`: plain-JS SHA-256 / HMAC (key schedule precomputed) / PBKDF2, identical output (tests vs Node crypto incl. Hindi text, >64-byte keys, empty password, 1,000-byte messages). Node: 12 ms for hash + check at 2,000 rounds. PBKDF2_ITERATIONS back to 2,000; hashes re-made at next sign-in.
@@ -171,6 +178,7 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Guides:** docs/PHASE2_DEPLOY.md (server update, GitHub upload, setup code, Galaxy Tab S9 FE preparation + screen pinning lock, enrollment), docs/PHASE2_CHECKLIST.md.
 
 ## 11. Change log
+- 2026-11-20 · v2.2.0 · Console remembers page data + pre-loads common pages; bound-sheet access. Owner's v2.1 check: 9 ms password check.
 - 2026-11-20 · v2.1.0 · Fast plain-JS password hashing (2,000 rounds), server timing in replies, console draws from cached start-up data. 43 node tests + browser tests pass.
 - 2026-11-20 · Phase 2 · Owner deployed Phase 1; password check 2,112 ms → rounds lowered to 1,000 with rehash on sign-in. Built kiosk app, device signing, enrollment, punches, unrecognised faces, Tablet/Punches/Unrecognised console pages, tablet lock guide. 42 node tests + 2 browser tests pass. Test-server fix: forward raw signed requests.
 - 2026-11-20 · Phase 1 · Built server (Code.gs 1,552 lines), console, templates, deploy guide + checklist; 26 automated tests + browser E2E pass. Fixes during build: open-ended rate void now checks all future locked months; login errors no longer reset the form; Excel template without styled empty cells.

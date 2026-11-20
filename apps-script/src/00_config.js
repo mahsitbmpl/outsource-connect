@@ -1,7 +1,7 @@
 /* ===== 00 Config: app constants and sheet schema ===== */
 var APP = {
   name: 'OutSource Connect',
-  version: '2.1.0',
+  version: '2.2.0',
   tz: 'Asia/Kolkata',
   roles: { ADMIN: 'ADMIN', OPS: 'OPS' }
 };

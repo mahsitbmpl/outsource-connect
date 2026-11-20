@@ -7,7 +7,9 @@ var Db = (function () {
   function ss() {
     if (ss_) return ss_;
     var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-    ss_ = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+    // The script lives inside the Sheet, so the bound sheet is the quick way in; openById is the fallback.
+    try { ss_ = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { ss_ = null; }
+    if (!ss_ && id) ss_ = SpreadsheetApp.openById(id);
     if (!ss_) fail('SETUP', 'Spreadsheet not found. Run setup() from the script editor first.');
     return ss_;
   }

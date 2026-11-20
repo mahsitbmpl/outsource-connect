@@ -1,5 +1,5 @@
 /* Staff master: list, add, detail (edit, transfer, exit, re-join), bulk import. */
-import { api } from './api.js';
+import { api, apiFast } from './api.js';
 import { esc, icon, toast, dialog, field, formData, showErrors, clearErrors, setBusy, skeleton, emptyState, initials, toCSV, download, parseCSV, setTitle, debounce, $, $$ } from './ui.js';
 import { state, go, deptName, today } from './state.js';
 import { startEnroll } from './kiosk-admin.js';
@@ -20,7 +20,7 @@ const companiesFor = (dept) => state.boot.companies.filter((c) => c.status === '
 export async function staffList(c) {
   setTitle('Staff');
   c.innerHTML = skeleton(8);
-  const all = await api('staff.list', { status: 'All' });
+  const all = await apiFast('staff.list', { status: 'All' });
   const counts = {}; all.filter((s) => s.status === 'Active').forEach((s) => { counts[s.deptCode] = (counts[s.deptCode] || 0) + 1; });
   setTitle('Staff', all.filter((s) => s.status === 'Active').length + ' active');
   c.innerHTML = `
@@ -125,7 +125,7 @@ export async function staffNew(c) {
 export async function staffDetail(c, id) {
   setTitle(id);
   c.innerHTML = skeleton(8);
-  const [s, audit] = await Promise.all([api('staff.get', { staffId: id }), api('audit.recent', { entity: 'Staff', entityId: id, limit: 500 })]);
+  const [s, audit] = await Promise.all([apiFast('staff.get', { staffId: id }), apiFast('audit.recent', { entity: 'Staff', entityId: id, limit: 500 })]);
   setTitle(s.displayName, s.staffId);
   const rate = s.currentRate;
   const histLabel = { department: 'Department', company: 'Company', designation: 'Designation' };
@@ -162,7 +162,7 @@ export async function staffDetail(c, id) {
       ${audit.map((a) => `<tr><td class="tnum nw">${esc(OSC.fmtDateTime(a.at))}</td><td>${esc(a.username)}</td><td>${esc(a.action)}</td><td>${esc(a.reason)}</td></tr>`).join('')}</tbody></table></div>` : emptyState('history', 'No changes yet')}</div>`;
 
   const reload = () => staffDetail(c, id);
-  api('face.thumb', { staffId: id }).then((r) => { const el = document.getElementById('thumb'); if (r.thumb && el) el.innerHTML = `<img src="${esc(r.thumb)}" alt="" style="width:100%;height:100%;object-fit:cover">`; }).catch(() => {});
+  apiFast('face.thumb', { staffId: id }).then((r) => { const el = document.getElementById('thumb'); if (r.thumb && el) el.innerHTML = `<img src="${esc(r.thumb)}" alt="" style="width:100%;height:100%;object-fit:cover">`; }).catch(() => {});
   const ben = $('#bEnroll'), bsa = $('#bSample');
   if (ben) ben.onclick = () => startEnroll(s, 'enroll', reload);
   if (bsa) bsa.onclick = () => startEnroll(s, 'sample', reload);

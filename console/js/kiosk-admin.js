@@ -1,5 +1,5 @@
 /* Phase 2 console pages: face enrollment, tablets, punches, unrecognised faces. */
-import { api } from './api.js';
+import { api, apiFast } from './api.js';
 import { esc, icon, toast, dialog, field, formData, skeleton, emptyState, setTitle, $, $$ } from './ui.js';
 import { state, isAdmin, today } from './state.js';
 
@@ -44,7 +44,7 @@ const ago = (m) => m == null ? 'never' : m < 1 ? 'just now' : m < 60 ? m + ' min
 export async function tabletView(c) {
   setTitle('Tablet');
   c.innerHTML = skeleton(4);
-  const list = await api('devices.list');
+  const list = await apiFast('devices.list');
   const active = list.filter((d) => d.active);
   c.innerHTML = `<div class="row"><span style="color:var(--muted)">Status is sent by the tablet every 3 minutes.</span><span class="sp"></span>
       <button class="btn ghost" id="rf">${icon('history')}Refresh</button>${isAdmin() ? `<button class="btn primary" id="add">${icon('plus')}Add tablet</button>` : ''}</div>
@@ -97,7 +97,7 @@ export async function punchesView(c) {
   c.innerHTML = `<div class="row"><div class="field" style="max-width:220px"><label for="pd">Date</label><input type="date" id="pd" value="${esc(punchDate)}" max="${esc(today())}"></div><span class="sp"></span>
     <span style="color:var(--muted);max-width:520px">Raw punches from the tablet, exactly as received. Duty hours are calculated from these in Phase 3. Punches are never edited or deleted.</span></div><div id="pl">${skeleton(6)}</div>`;
   const load = async () => {
-    const list = (await api('punches.byDate', { date: punchDate })).sort((a, b) => (a.at < b.at ? 1 : -1));
+    const list = (await apiFast('punches.byDate', { date: punchDate })).sort((a, b) => (a.at < b.at ? 1 : -1));
     const ins = list.filter((p) => p.type === 'IN' && p.status === 'Accepted').length, outs = list.filter((p) => p.type === 'OUT' && p.status === 'Accepted').length;
     $('#pl').innerHTML = list.length ? `<div class="chips" style="margin-bottom:12px"><span class="chip">IN <span class="ct">${ins}</span></span><span class="chip">OUT <span class="ct">${outs}</span></span><span class="chip">Total <span class="ct">${list.length}</span></span></div>
       <div class="tablebox"><table class="t"><thead><tr><th>Time</th><th>Employee</th><th>Type</th><th>Status</th><th class="n">Match</th><th>Liveness</th><th>Received</th><th>Note</th><th></th></tr></thead><tbody>
@@ -117,7 +117,7 @@ export async function punchesView(c) {
 export async function unrecognisedView(c) {
   setTitle('Unrecognised faces');
   c.innerHTML = skeleton(5);
-  const list = await api('unrecognised.list', { status: 'All' });
+  const list = await apiFast('unrecognised.list', { status: 'All' });
   const open = list.filter((u) => u.status === 'Open');
   c.innerHTML = `<div class="note">${icon('scan-face')}<span>When the tablet cannot recognise a face it saves a photo here (at most one a minute). Assigning a photo to a person as a punch comes with the exceptions list in Phase 4. If the same person appears often, use "Add another sample" on their staff page.</span></div>
     ${list.length ? `<div class="tablebox"><table class="t"><thead><tr><th>When</th><th>Closest match</th><th class="n">Distance</th><th>Status</th><th>Note</th><th></th></tr></thead><tbody>

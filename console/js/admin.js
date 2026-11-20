@@ -1,5 +1,5 @@
 /* Admin pages: departments, users, settings, audit log. */
-import { api } from './api.js';
+import { api, apiFast } from './api.js';
 import { esc, icon, toast, dialog, field, formData, skeleton, emptyState, setTitle, $, $$ } from './ui.js';
 import { state, loadBoot } from './state.js';
 
@@ -9,7 +9,7 @@ const OSC = window.OSC;
 export async function departmentsView(c) {
   setTitle('Departments');
   c.innerHTML = skeleton(4);
-  const list = await api('departments.list');
+  const list = await apiFast('departments.list');
   c.innerHTML = `<div class="row"><span style="color:var(--muted)">The code starts every Employee ID (HK001). Required headcount feeds the dashboard and emails.</span><span class="sp"></span><button class="btn primary" id="add">${icon('plus')}Add department</button></div>
     <div class="tablebox"><table class="t"><thead><tr><th>Code</th><th>Name</th><th class="n">Required Day</th><th class="n">Required Night</th><th>Next Employee ID</th><th>Status</th><th></th></tr></thead><tbody>
     ${list.map((d) => `<tr><td><b>${esc(d.code)}</b></td><td>${esc(d.name)}</td><td class="n">${esc(d.reqDay)}</td><td class="n">${esc(d.reqNight)}</td><td class="tnum">${esc(OSC.staffId(d.code, d.nextSeq || 1))}</td>
@@ -46,7 +46,7 @@ function secretDialog(title, username, pw) {
 export async function usersView(c) {
   setTitle('Users');
   c.innerHTML = skeleton(5);
-  const [list, log] = await Promise.all([api('users.list'), api('users.loginLog', { limit: 100 })]);
+  const [list, log] = await Promise.all([apiFast('users.list'), apiFast('users.loginLog', { limit: 100 })]);
   c.innerHTML = `<div class="row"><span style="color:var(--muted)">Ops managers and Admins who can sign in to this console. Staff never sign in.</span><span class="sp"></span><button class="btn primary" id="add">${icon('user-plus')}Add user</button></div>
     <div class="tablebox"><table class="t"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead><tbody>
     ${list.map((u) => `<tr><td><b>${esc(u.username)}</b></td><td>${esc(u.fullName)}</td><td>${u.role === 'ADMIN' ? 'Admin' : 'Ops manager'}</td>
@@ -103,7 +103,7 @@ const GROUPS = [
 export async function settingsView(c) {
   setTitle('Settings');
   c.innerHTML = skeleton(8);
-  const list = await api('settings.list');
+  const list = await apiFast('settings.list');
   const by = {}; list.forEach((s) => { by[s.key] = s; });
   const shown = {};
   const card = (title, keys) => `<div class="card"><h3>${esc(title)}</h3><div class="tablebox" style="border:0"><table class="t"><tbody>
@@ -135,7 +135,7 @@ export async function settingsView(c) {
 export async function auditView(c) {
   setTitle('Audit log');
   c.innerHTML = skeleton(8);
-  const rows = await api('audit.recent', { limit: 300 });
+  const rows = await apiFast('audit.recent', { limit: 300 });
   const entities = Array.from(new Set(rows.map((r) => r.entity))).sort();
   c.innerHTML = `<div class="row"><span style="color:var(--muted)">Last 300 changes, newest first. Entries can never be edited or deleted.</span><span class="sp"></span>
     <select class="chip" id="ent" aria-label="Filter"><option value="">Everything</option>${entities.map((e) => `<option>${esc(e)}</option>`).join('')}</select></div><div id="al"></div>`;

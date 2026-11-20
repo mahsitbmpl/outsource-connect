@@ -1,5 +1,5 @@
 /* Company master and rate cards. */
-import { api } from './api.js';
+import { api, apiFast } from './api.js';
 import { esc, icon, toast, dialog, field, formData, showErrors, clearErrors, setBusy, skeleton, emptyState, setTitle, $, $$ } from './ui.js';
 import { state, go, loadBoot, deptName, today } from './state.js';
 
@@ -32,7 +32,7 @@ function prepare(d) { d.deptCodes = (d.deptCodes || []).join(','); return d; }
 export async function companiesList(c) {
   setTitle('Companies & rates');
   c.innerHTML = skeleton(5);
-  const list = await api('companies.list');
+  const list = await apiFast('companies.list');
   c.innerHTML = `<div class="row"><span style="color:var(--muted)">Outsourced service providers, their contracts and rate cards.</span><span class="sp"></span><a class="btn primary" href="#/companies/new">${icon('plus')}Add company</a></div>
     ${list.length ? `<div class="tablebox"><table class="t"><thead><tr><th>Code</th><th>Company</th><th>Departments</th><th>Contract</th><th>GSTIN</th><th>Status</th></tr></thead><tbody>
       ${list.map((x) => `<tr class="click" data-id="${esc(x.companyId)}" tabindex="0"><td><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td><td>${x.deptCodes.map((d) => esc(deptName(d))).join(', ')}</td>
@@ -69,7 +69,7 @@ export function companyNew(c) {
 export async function companyDetail(c, id) {
   setTitle('Company');
   c.innerHTML = skeleton(8);
-  const co = await api('companies.get', { companyId: id });
+  const co = await apiFast('companies.get', { companyId: id });
   setTitle(co.name, co.code);
   const groups = {};
   co.rates.forEach((r) => { const k = r.deptCode + '|' + r.designation; (groups[k] = groups[k] || []).push(r); });

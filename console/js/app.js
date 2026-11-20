@@ -1,5 +1,5 @@
 /* Console entry: sign-in, shell, router, home. */
-import { api, session, setAuthLostHandler, ApiError, timing } from './api.js';
+import { api, apiFast, session, setAuthLostHandler, ApiError, timing, setStaleHandler, clearRemembered, prefetch } from './api.js';
 import { esc, icon, toast, field, formData, showErrors, clearErrors, setBusy, skeleton, initials, setTitle, $ } from './ui.js';
 import { state, loadBoot, isAdmin, go, cachedBoot, useCachedBoot } from './state.js';
 import { staffList, staffNew, staffDetail, staffImport } from './staff.js';
@@ -104,7 +104,7 @@ function changePasswordView(forced) {
 
 async function logout() {
   try { await api('auth.logout'); } catch (e) { /* already signed out */ }
-  session.clear(); state.boot = null; loginView();
+  session.clear(); clearRemembered(); state.boot = null; loginView();
 }
 
 // ---------- shell ----------
@@ -166,7 +166,7 @@ async function homeView(c) {
   // Draw at once from start-up data; refresh only if that data is older than a minute.
   if (state.boot.summary) draw(state.boot.summary); else c.innerHTML = skeleton(6);
   if (!state.boot.summary || !state.bootAt || Date.now() - state.bootAt > 60000) {
-    const fresh = await api('home.summary');
+    const fresh = await apiFast('home.summary');
     state.boot.summary = fresh;
     if ((location.hash || '#/home') === '#/home') draw(fresh);
   }
@@ -223,7 +223,7 @@ async function start() {
   if (cached) {
     useCachedBoot(cached);
     renderShell(); route();
-    loadBoot().then(() => { $('#sideLinks') && updateNav(location.hash || '#/home'); }).catch(() => { /* auth handler shows sign-in if needed */ });
+    loadBoot().then(() => { $('#sideLinks') && updateNav(location.hash || '#/home'); warmUp(); }).catch(() => { /* auth handler shows sign-in if needed */ });
     return;
   }
   app.innerHTML = '<div class="login"><div class="box">' + skeleton(4) + '</div></div>';
@@ -235,6 +235,7 @@ async function start() {
   }
   renderShell();
   route();
+  setTimeout(warmUp, 1500);
 }
 
 setAuthLostHandler((err) => {
@@ -242,6 +243,15 @@ setAuthLostHandler((err) => {
   else loginView(err.message);
 });
 window.addEventListener('hashchange', route);
+// Fresh data arrived for the page on screen: redraw, unless the user is typing or a dialog is open.
+setStaleHandler(() => {
+  const a = document.activeElement;
+  if (document.querySelector('.scrim') || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+  route();
+});
+function warmUp() {
+  prefetch([['staff.list', { status: 'All' }], ['companies.list'], ['devices.list'], ['punches.byDate', { date: state.boot.today }], ['unrecognised.list', { status: 'All' }]]);
+}
 
 // client-side idle sign-out (the server enforces it too)
 let lastActive = Date.now();
