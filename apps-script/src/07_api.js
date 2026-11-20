@@ -17,7 +17,8 @@ var ROUTES = {
       user: { username: u.username, fullName: u.fullName, role: u.role },
       app: { name: APP.name, version: APP.version, footer: Settings.str('footerText'), orgName: Settings.str('orgName') },
       titles: Settings.list('titles'), designations: Settings.list('designations'),
-      departments: Departments.list(), companies: Companies.list(), today: Clock.today()
+      departments: Departments.list(), companies: Companies.list(), today: Clock.today(),
+      summary: { staff: Staff.stats(), departments: Departments.list(), companies: Companies.list().length }
     };
   }],
   'home.summary': ['APP', function () {
@@ -87,5 +88,10 @@ function apiCall(body) {
   }
 }
 
-function doPost(e) { return respond(apiCall(e && e.postData ? e.postData.contents : '')); }
+function doPost(e) {
+  var t0 = Date.now();
+  var out = apiCall(e && e.postData ? e.postData.contents : '');
+  out.ms = Date.now() - t0; // time our code used; the rest of the wait is Google starting the script
+  return respond(out);
+}
 function doGet() { return respond({ ok: true, data: { app: APP.name, version: APP.version, status: 'running' } }); }

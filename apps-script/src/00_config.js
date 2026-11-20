@@ -1,7 +1,7 @@
 /* ===== 00 Config: app constants and sheet schema ===== */
 var APP = {
   name: 'OutSource Connect',
-  version: '2.0.0-phase2',
+  version: '2.1.0',
   tz: 'Asia/Kolkata',
   roles: { ADMIN: 'ADMIN', OPS: 'OPS' }
 };
@@ -70,7 +70,7 @@ var DEFAULT_DEPARTMENTS = [
   { code: 'SC', name: 'Security', reqDay: 6, reqNight: 4, sortOrder: 3 }
 ];
 
-var PBKDF2_ITERATIONS = 1000; // stored inside each hash; older hashes are re-made with this value at the next sign-in
+var PBKDF2_ITERATIONS = 2000; // stored inside each hash; older hashes are re-made with this value at the next sign-in (fast plain-JS hashing since v2.1)
 var CACHED_TABLES = ['Settings', 'Departments', 'Companies', 'Rates', 'Staff', 'Users', 'MonthLocks', 'Devices'];
 
 /* Punches live in one tab per year (Punches_2026, Punches_2027 ...). Rows are never edited or deleted. */

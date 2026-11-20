@@ -150,6 +150,14 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Tests:** tests/core.test.js + tests/server.test.js (26 tests, node --test; server tests run the real dist/Code.gs inside tests/gas-mock.js), tests/e2e_console.py (Playwright walkthrough via tools/dev-server.js). All green on 20-Nov-2026.
 **Deviations from brief:** SheetJS not used (vendor CDN blocked) → read-excel-file 5.8.6 for .xlsx import. Lockout auto-expires after 30 min (setting) as well as Admin unlock.
 
+## 15. v2.1.0 speed fix (20-Nov-2026)
+- Owner measured 1,560 ms (hash + check, 1,000 rounds) after v2.0; v1 was 2,112 ms at 2,000 rounds → ~1 s fixed cost + ~0.28 ms per Utilities.computeHmacSha256Signature call.
+- New apps-script/src/01b_sha256.js `FastHash`: plain-JS SHA-256 / HMAC (key schedule precomputed) / PBKDF2, identical output (tests vs Node crypto incl. Hindi text, >64-byte keys, empty password, 1,000-byte messages). Node: 12 ms for hash + check at 2,000 rounds. PBKDF2_ITERATIONS back to 2,000; hashes re-made at next sign-in.
+- benchmarkHash now reports the sign-in check and new-password times separately.
+- Every API reply carries `ms` (time our code used). Console user menu shows "Last server reply x s (our code y s)"; the remainder is Google start-up + network.
+- Console start-up: meta.bootstrap includes the home summary (one call instead of two); last start-up data cached in localStorage (`osc.boot`) so the console draws at once and refreshes in the background (0.2 s to Home on reload with a simulated 1.5 s server).
+- Note: once the tablet polls every 15 s the Apps Script stays warm, which also shortens console replies.
+
 ## 14. As built — Phase 2 (v2.0.0-phase2)
 **Password speed fix:** owner measured 2,112 ms for hash+check at 2,000 rounds → PBKDF2_ITERATIONS = 1000 (~1 s). Hashes store their round count; on successful sign-in a hash with a different count is re-made with the current one.
 **Server 09_kiosk.js:** Devices (create → deviceId TAB1…, 160-bit base32 secret in Script Properties DEVICE_SECRET_<id>, shown once as setup code TAB1-XXXX×8; revoke deletes secret), signed request check (HMAC-SHA256 over deviceId\nts\nnonce\naction\npayload, ±10 min clock, nonce cache 25 min, constant-time compare), heartbeat (Devices row updated; Heartbeats history at most every 30 min), Kiosk.sync (config + active faces + thumbs + last punch per person), poll (facesVersion + pending enrollment via cache), punch batch (idempotent on punchId via cache + last 3,000 rows; Punches_YYYY append-only; server marks same-type repeat within duplicateWindowMin as Duplicate; notes for time ahead / >7 days late; proof photo to Drive Photos/YYYY-MM; StaffState keeps latest accepted punch), unrecognised (Drive Unrecognised/YYYY-MM, once per id), enrollment state machine Requested → InProgress → Captured → Done | Failed | Cancelled (one open request at a time; server duplicate-face check against other active staff; test punch confirms; enroll replaces old samples, sample adds), staff exit disables faces at once (FACES_VERSION bump makes tablets re-sync).
@@ -163,6 +171,7 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Guides:** docs/PHASE2_DEPLOY.md (server update, GitHub upload, setup code, Galaxy Tab S9 FE preparation + screen pinning lock, enrollment), docs/PHASE2_CHECKLIST.md.
 
 ## 11. Change log
+- 2026-11-20 · v2.1.0 · Fast plain-JS password hashing (2,000 rounds), server timing in replies, console draws from cached start-up data. 43 node tests + browser tests pass.
 - 2026-11-20 · Phase 2 · Owner deployed Phase 1; password check 2,112 ms → rounds lowered to 1,000 with rehash on sign-in. Built kiosk app, device signing, enrollment, punches, unrecognised faces, Tablet/Punches/Unrecognised console pages, tablet lock guide. 42 node tests + 2 browser tests pass. Test-server fix: forward raw signed requests.
 - 2026-11-20 · Phase 1 · Built server (Code.gs 1,552 lines), console, templates, deploy guide + checklist; 26 automated tests + browser E2E pass. Fixes during build: open-ended rate void now checks all future locked months; login errors no longer reset the form; Excel template without styled empty cells.
 - 2026-11-20 · Phase 0 · Name changed to "OutSource Connect" (no Marengo prefix); footer keeps "Hospital"; phase plan (§12) agreed.

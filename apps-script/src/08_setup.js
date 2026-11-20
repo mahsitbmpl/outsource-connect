@@ -89,11 +89,12 @@ function resetAdminPassword() {
   showResult_('Admin password reset', 'Username: ' + u.username + '\nTemporary password: ' + pw + '\n\nChange it at first sign-in.');
 }
 
-/** Measures how long one password check takes on Google's servers (aim: under 1.5 seconds). */
+/** Measures the password check on Google's servers. Sign-in uses one check; the target is well under 1 second. */
 function benchmarkHash() {
-  var t = Date.now(); Auth.verifyPassword('benchmark-1234', Auth.hashPassword('benchmark-1234')); var ms = Date.now() - t;
-  showResult_('Password speed', 'Hash + check took ' + ms + ' ms with ' + PBKDF2_ITERATIONS + ' rounds.');
-  return ms;
+  var t0 = Date.now(); var h = Auth.hashPassword('benchmark-1234'); var tHash = Date.now() - t0;
+  var t1 = Date.now(); Auth.verifyPassword('benchmark-1234', h); var tCheck = Date.now() - t1;
+  showResult_('Password speed', 'Sign-in password check: ' + tCheck + ' ms\nCreating a new password: ' + tHash + ' ms\n(' + PBKDF2_ITERATIONS + ' rounds, version ' + APP.version + ')');
+  return tCheck;
 }
 
 /* ---------- Demo data (all fake; marked with vendorCode DEMO and company codes starting with DEMO) ---------- */

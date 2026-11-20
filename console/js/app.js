@@ -1,7 +1,7 @@
 /* Console entry: sign-in, shell, router, home. */
-import { api, session, setAuthLostHandler, ApiError } from './api.js';
+import { api, session, setAuthLostHandler, ApiError, timing } from './api.js';
 import { esc, icon, toast, field, formData, showErrors, clearErrors, setBusy, skeleton, initials, setTitle, $ } from './ui.js';
-import { state, loadBoot, isAdmin, go } from './state.js';
+import { state, loadBoot, isAdmin, go, cachedBoot, useCachedBoot } from './state.js';
 import { staffList, staffNew, staffDetail, staffImport } from './staff.js';
 import { companiesList, companyNew, companyDetail } from './companies.js';
 import { departmentsView, usersView, settingsView, auditView } from './admin.js';
@@ -121,14 +121,18 @@ function renderShell() {
       <header class="top"><img class="mlogo" src="img/mark.png" alt=""><h1 id="pageTitle">Home</h1><span class="sub tnum" id="pageSub"></span><span class="sp"></span>
         <div class="usermenu"><button type="button" id="umBtn" aria-haspopup="true" aria-expanded="false"><span class="av">${esc(initials(u.fullName))}</span><span>${esc(u.fullName.split(' ')[0])}</span></button>
           <div class="menu" id="umMenu" hidden><div class="who"><b>${esc(u.fullName)}</b><small>${esc(u.username)} · ${u.role === 'ADMIN' ? 'Admin' : 'Ops manager'}</small></div>
-          <a href="#/password">${icon('key-round')}Change password</a><button type="button" id="umOut">${icon('log-out')}Sign out</button></div></div>
+          <div class="who" id="umTiming" style="font-size:12px;color:var(--muted)"></div><a href="#/password">${icon('key-round')}Change password</a><button type="button" id="umOut">${icon('log-out')}Sign out</button></div></div>
       </header>
       <main class="content" id="content"></main>
       <footer class="foot"><span>${esc(FOOTER)}</span><span>OutSource Connect · v${esc(state.boot.app.version)}</span></footer>
     </div>
     <nav class="tabs" aria-label="Main (mobile)" id="tabs"></nav></div>`;
   const btn = $('#umBtn'), menu = $('#umMenu');
-  btn.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); };
+  btn.onclick = (e) => {
+    e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden));
+    const t = timing.last;
+    $('#umTiming').textContent = t ? `Last server reply ${(t.totalMs / 1000).toFixed(1)} s (our code ${(t.serverMs / 1000).toFixed(2)} s, rest is Google start-up and network)` : '';
+  };
   document.addEventListener('click', () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
   $('#umOut').onclick = logout;
 }
@@ -141,24 +145,31 @@ function updateNav(hash) {
 // ---------- home ----------
 async function homeView(c) {
   setTitle('Home', OSC.fmtDate(state.boot.today));
-  c.innerHTML = skeleton(6);
-  const s = await api('home.summary');
-  const faceNone = s.staff.face['Not enrolled'] || 0, facePending = s.staff.face.Pending || 0;
-  c.innerHTML = `
-    <div class="grid g4">
-      <div class="card kpi"><div class="l">${icon('users')}Active staff</div><div class="v">${s.staff.active}</div><div class="d">${s.staff.exited} exited</div></div>
-      <div class="card kpi"><div class="l">${icon('scan-face')}Face not enrolled</div><div class="v">${faceNone}</div><div class="d">${facePending} pending test punch</div></div>
-      <div class="card kpi"><div class="l">${icon('building-2')}Companies</div><div class="v">${s.companies}</div><div class="d"><a href="#/companies">Companies & rates</a></div></div>
-      <div class="card kpi"><div class="l">${icon('layers')}Departments</div><div class="v">${s.departments.filter((d) => d.active).length}</div><div class="d">${s.departments.map((d) => esc(d.code)).join(' · ')}</div></div>
-    </div>
-    <div class="grid g3">${s.departments.filter((d) => d.active).map((d) => {
-      const n = s.staff.byDept[d.code] || 0, req = (d.reqDay || 0) + (d.reqNight || 0);
-      return `<div class="card"><div class="row"><b style="font-size:16px">${esc(d.name)}</b><span class="sp"></span><span class="pill neu">${esc(d.code)}</span></div>
-        <div class="kpi"><div class="v">${n} <small>active staff</small></div></div>
-        <div class="bar"><i style="width:${Math.min(100, req ? Math.round(n / req * 100) : 0)}%"></i></div>
-        <div class="row" style="color:var(--muted);font-size:12px"><span>Required per day: ${d.reqDay} Day + ${d.reqNight} Night</span><span class="sp"></span><span>Next ID ${esc(OSC.staffId(d.code, d.nextSeq || 1))}</span></div></div>`;
-    }).join('')}</div>
-    <div class="note">${icon('clock')}<span>Live attendance, the tablet and billing are added in the next phases. This build (Phase 2) adds the tablet: face enrollment, punching, punches list and unrecognised faces.</span></div>`;
+  const draw = (s) => {
+    const faceNone = s.staff.face['Not enrolled'] || 0, facePending = s.staff.face.Pending || 0;
+    c.innerHTML = `
+      <div class="grid g4">
+        <div class="card kpi"><div class="l">${icon('users')}Active staff</div><div class="v">${s.staff.active}</div><div class="d">${s.staff.exited} exited</div></div>
+        <div class="card kpi"><div class="l">${icon('scan-face')}Face not enrolled</div><div class="v">${faceNone}</div><div class="d">${facePending} pending test punch</div></div>
+        <div class="card kpi"><div class="l">${icon('building-2')}Companies</div><div class="v">${s.companies}</div><div class="d"><a href="#/companies">Companies & rates</a></div></div>
+        <div class="card kpi"><div class="l">${icon('layers')}Departments</div><div class="v">${s.departments.filter((d) => d.active).length}</div><div class="d">${s.departments.map((d) => esc(d.code)).join(' · ')}</div></div>
+      </div>
+      <div class="grid g3">${s.departments.filter((d) => d.active).map((d) => {
+        const n = s.staff.byDept[d.code] || 0, req = (d.reqDay || 0) + (d.reqNight || 0);
+        return `<div class="card"><div class="row"><b style="font-size:16px">${esc(d.name)}</b><span class="sp"></span><span class="pill neu">${esc(d.code)}</span></div>
+          <div class="kpi"><div class="v">${n} <small>active staff</small></div></div>
+          <div class="bar"><i style="width:${Math.min(100, req ? Math.round(n / req * 100) : 0)}%"></i></div>
+          <div class="row" style="color:var(--muted);font-size:12px"><span>Required per day: ${d.reqDay} Day + ${d.reqNight} Night</span><span class="sp"></span><span>Next ID ${esc(OSC.staffId(d.code, d.nextSeq || 1))}</span></div></div>`;
+      }).join('')}</div>
+      <div class="note">${icon('clock')}<span>Live attendance, the tablet and billing are added in the next phases. This build (Phase 2) adds the tablet: face enrollment, punching, punches list and unrecognised faces.</span></div>`;
+  };
+  // Draw at once from start-up data; refresh only if that data is older than a minute.
+  if (state.boot.summary) draw(state.boot.summary); else c.innerHTML = skeleton(6);
+  if (!state.boot.summary || !state.bootAt || Date.now() - state.bootAt > 60000) {
+    const fresh = await api('home.summary');
+    state.boot.summary = fresh;
+    if ((location.hash || '#/home') === '#/home') draw(fresh);
+  }
 }
 
 function moreView(c) {
@@ -207,6 +218,14 @@ async function route() {
 }
 
 async function start() {
+  // Draw at once from the last start-up data (if any), then refresh from the server in the background.
+  const sess = session.get(), cached = sess && sess.user ? cachedBoot(sess.user.username) : null;
+  if (cached) {
+    useCachedBoot(cached);
+    renderShell(); route();
+    loadBoot().then(() => { $('#sideLinks') && updateNav(location.hash || '#/home'); }).catch(() => { /* auth handler shows sign-in if needed */ });
+    return;
+  }
   app.innerHTML = '<div class="login"><div class="box">' + skeleton(4) + '</div></div>';
   try { await loadBoot(); }
   catch (e) {

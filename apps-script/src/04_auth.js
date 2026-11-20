@@ -3,16 +3,10 @@ var Auth = (function () {
 
   // ----- PBKDF2-HMAC-SHA256 (single 32-byte block) -----
   function strBytes(s) { return Utilities.newBlob(String(s)).getBytes(); }
-  function hmac(keyBytes, msgBytes) { return Utilities.computeHmacSha256Signature(msgBytes, keyBytes); }
+  /** PBKDF2-HMAC-SHA256 (plain JavaScript, see FastHash). Returns signed bytes like Utilities does. */
   function pbkdf2(password, saltBytes, iterations) {
-    var pw = strBytes(password);
-    var u = hmac(pw, saltBytes.concat([0, 0, 0, 1]));
-    var t = u.slice();
-    for (var i = 1; i < iterations; i++) {
-      u = hmac(pw, u);
-      for (var j = 0; j < t.length; j++) t[j] = t[j] ^ u[j];
-    }
-    return t.map(function (b) { b = b & 0xff; return b > 127 ? b - 256 : b; });
+    var out = FastHash.pbkdf2(strBytes(password).map(function (b) { return b & 0xff; }), saltBytes.map(function (b) { return b & 0xff; }), iterations);
+    return Array.prototype.map.call(out, function (b) { return b > 127 ? b - 256 : b; });
   }
   function hashPassword(password, iterations) {
     iterations = iterations || PBKDF2_ITERATIONS;

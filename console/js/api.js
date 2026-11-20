@@ -7,6 +7,9 @@ export const session = {
   clear() { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
 };
 
+/** Last request timing, shown in the user menu: total wait vs. time our server code used. */
+export const timing = { last: null };
+
 export class ApiError extends Error {
   constructor(code, message, fields) { super(message); this.code = code; this.fields = fields || null; }
 }
@@ -18,6 +21,7 @@ export async function api(action, data) {
   const url = (window.OSC_CONFIG || {}).apiUrl;
   if (!url || url.indexOf('script.google.com') < 0) throw new ApiError('CONFIG', 'The server address is not set. Put the Apps Script web app URL in config.js.');
   const s = session.get();
+  const t0 = performance.now();
   let res;
   try {
     res = await fetch(url, {
@@ -31,6 +35,7 @@ export async function api(action, data) {
   }
   let body;
   try { body = await res.json(); } catch (e) { throw new ApiError('NETWORK', 'The server sent an unexpected reply. If you just deployed, check the web app access is set to "Anyone".'); }
+  timing.last = { action, totalMs: Math.round(performance.now() - t0), serverMs: body.ms || 0 };
   if (body.ok) return body.data;
   const err = new ApiError(body.error.code, body.error.message, body.error.fields);
   if (action !== 'auth.login' && action !== 'auth.changePassword') {

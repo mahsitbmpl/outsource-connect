@@ -38,7 +38,7 @@ test('PBKDF2 implementation matches Node crypto (RFC 8018)', () => {
   const node = crypto.pbkdf2Sync('correct horse', Buffer.from(salt), 1000, 32, 'sha256').toString('hex');
   assert.equal(ours, node);
   const h = env.ctx.Auth.hashPassword('Secret12345');
-  assert.match(h, /^pbkdf2-sha256\$1000\$/);
+  assert.match(h, /^pbkdf2-sha256\$2000\$/);
   assert.equal(env.ctx.Auth.verifyPassword('Secret12345', h), true);
   assert.equal(env.ctx.Auth.verifyPassword('Secret12346', h), false);
 });
@@ -279,12 +279,25 @@ test('Date objects coming back from Sheets are read as IST dates', () => {
   assert.equal(ok(env.call('staff.get', { staffId: 'HK001' }, env.admin)).joinDate, '2026-11-01');
 });
 
-test('older 2000-round password hashes still work and are re-made with the current rounds at sign-in', () => {
+test('older 1000-round password hashes (v2.0) still work and are re-made with the current rounds at sign-in', () => {
   const env = ready();
-  const old = env.ctx.Auth.hashPassword('Legacy2026pass', 2000);
+  const old = env.ctx.Auth.hashPassword('Legacy2026pass', 1000);
   env.ctx.Db.update('Users', 'admin', { pwHash: old });
   ok(env.call('auth.login', { username: 'admin', password: 'Legacy2026pass' }));
   env.ctx.Db.reset();
-  assert.match(env.ctx.Db.find('Users', 'admin').pwHash, /^pbkdf2-sha256\$1000\$/);
+  assert.match(env.ctx.Db.find('Users', 'admin').pwHash, /^pbkdf2-sha256\$2000\$/);
   ok(env.call('auth.login', { username: 'admin', password: 'Legacy2026pass' }));
+});
+
+test('a hash made the Phase 1 way (Google HMAC calls) verifies with the new fast code', () => {
+  const env = makeEnv();
+  const salt = crypto.randomBytes(16);
+  // Phase 1 stored exactly PBKDF2-HMAC-SHA256 (proved equal to Node crypto), so Node can stand in for it here
+  const dk = crypto.pbkdf2Sync('Phase1Password9', salt, 2000, 32, 'sha256');
+  const b64 = (b) => b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  assert.equal(env.ctx.Auth.verifyPassword('Phase1Password9', 'pbkdf2-sha256$2000$' + b64(salt) + '$' + b64(dk)), true);
+  assert.equal(env.ctx.Auth.verifyPassword('Phase1Password8', 'pbkdf2-sha256$2000$' + b64(salt) + '$' + b64(dk)), false);
+  assert.equal(Buffer.from(env.ctx.FastHash.sha256(new Uint8Array(Buffer.from('abc')))).toString('hex'), crypto.createHash('sha256').update('abc').digest('hex'));
+  const long = crypto.randomBytes(1000);
+  assert.equal(Buffer.from(env.ctx.FastHash.sha256(new Uint8Array(long))).toString('hex'), crypto.createHash('sha256').update(long).digest('hex'));
 });

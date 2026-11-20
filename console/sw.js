@@ -1,5 +1,5 @@
 /* Console service worker: keeps the app shell available; never caches API calls. */
-const VERSION = 'osc-console-2.0.0-phase2';
+const VERSION = 'osc-console-2.1.0';
 const SHELL = [
   './', 'index.html', 'config.js', 'css/app.css', 'js/osc-core.js', 'js/api.js', 'js/ui.js', 'js/state.js', 'js/app.js',
   'js/staff.js', 'js/companies.js', 'js/admin.js', 'js/kiosk-admin.js', 'vendor/read-excel-file-5.8.6.min.js', 'img/logo.png', 'img/mark.png',
