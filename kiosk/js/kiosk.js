@@ -4,7 +4,7 @@ import * as net from './net.js';
 import * as cam from './face.js';
 
 const L = window.KioskLogic, OSC = window.OSC;
-const VERSION = '2.0.0';
+const VERSION = '3.0.0';
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -191,7 +191,12 @@ async function punch(staffId, m) {
   kv.set('last', S.last);
   const chip = navigator.onLine ? statusChip() : '<span class="k-chip">○ Saved on tablet · will sync</span>';
   if (d.kind === 'IN') showResult('IN', { staffId, name: p.name, status: t2('inOk'), meta, time: timeOf(now), foot: t2('welcome'), chip });
-  else showResult('OUT', { staffId, name: p.name, status: t2('outOk'), meta, time: timeOf(now), sub: `This duty: ${L.elapsedText(now - d.last.at)} · IN ${timeOf(d.last.at)}`, foot: t2('thanks'), chip });
+  else {
+    // hours under the attendance rules (same engine as the server); the final figure can still change after review
+    let hrs = L.elapsedText(now - d.last.at);
+    if (cfg.rules && window.OSCRules) { const r = window.OSCRules.computeDuty(d.last.at, now, window.OSCRules.normalise(cfg.rules).rules); if (r.hours != null) hrs = r.hours.toFixed(2) + ' hrs'; }
+    showResult('OUT', { staffId, name: p.name, status: t2('outOk'), meta, time: timeOf(now), sub: `This duty: ${hrs} · IN ${timeOf(d.last.at)}`, foot: t2('thanks'), chip });
+  }
   flushSoon();
 }
 

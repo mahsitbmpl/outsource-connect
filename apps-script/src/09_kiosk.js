@@ -1,5 +1,5 @@
 /* ===== 09 Tablet (kiosk): device tokens, sync, punches, face enrollment, unrecognised faces ===== */
-var KIOSK_APP_MIN = '2.0.0';
+var KIOSK_APP_MIN = '3.0.0';
 var B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 var Devices = (function () {
@@ -115,7 +115,7 @@ var Kiosk = (function () {
       return { staffId: id, name: s.title + ' ' + s.fullName, dept: dm[s.deptCode] || s.deptCode, designation: s.designation, descriptors: faces[id],
         thumb: thumbs[id] || '', last: st && st.lastAt ? { type: st.lastType, at: Date.parse(st.lastAt), punchId: st.lastPunchId } : null };
     });
-    return { config: config(), facesVersion: facesVersion(), people: people };
+    return { config: Kiosk.config(), facesVersion: facesVersion(), people: people };
   }
   function poll(dev) {
     var p = pendingRequest();

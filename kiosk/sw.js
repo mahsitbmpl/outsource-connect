@@ -1,5 +1,5 @@
 /* Kiosk service worker: everything (app, fonts, face models) is cached so the tablet works offline. API calls are never cached. */
-const VERSION = 'osc-kiosk-2.0.0';
+const VERSION = 'osc-kiosk-3.0.0';
 const FILES = [
   'config.js',
   'css/kiosk.css',
@@ -18,6 +18,7 @@ const FILES = [
   'js/logic.js',
   'js/net.js',
   'js/osc-core.js',
+  'js/rules.js',
   'js/store.js',
   'manifest.webmanifest',
   'models/face_landmark_68_model-weights_manifest.json',

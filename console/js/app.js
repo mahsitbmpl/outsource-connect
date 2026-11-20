@@ -6,6 +6,7 @@ import { staffList, staffNew, staffDetail, staffImport } from './staff.js';
 import { companiesList, companyNew, companyDetail } from './companies.js';
 import { departmentsView, usersView, settingsView, auditView } from './admin.js';
 import { tabletView, punchesView, unrecognisedView } from './kiosk-admin.js';
+import { dutiesView, rulesView, ruleTestsView } from './duties.js';
 
 const OSC = window.OSC;
 const FOOTER = 'Designed and developed by IT Department, Marengo Asia Hospital, Surat';
@@ -16,12 +17,14 @@ const NAV = [
   { href: '#/staff', icon: 'users', label: 'Staff' },
   { href: '#/companies', icon: 'building-2', label: 'Companies & rates' },
   { soon: true, icon: 'triangle-alert', label: 'Exceptions' },
+  { href: '#/duties', icon: 'list-checks', label: 'Duties' },
   { href: '#/punches', icon: 'clock', label: 'Punches' },
   { href: '#/unrecognised', icon: 'scan-face', label: 'Unrecognised faces' },
   { href: '#/tablet', icon: 'tablet-smartphone', label: 'Tablet' },
   { soon: true, icon: 'file-text', label: 'Month-end pack' }
 ];
 const ADMIN_NAV = [
+  { href: '#/rules', icon: 'scale', label: 'Attendance rules' },
   { href: '#/departments', icon: 'layers', label: 'Departments' },
   { href: '#/users', icon: 'shield-check', label: 'Users' },
   { href: '#/settings', icon: 'settings', label: 'Settings' },
@@ -161,7 +164,7 @@ async function homeView(c) {
           <div class="bar"><i style="width:${Math.min(100, req ? Math.round(n / req * 100) : 0)}%"></i></div>
           <div class="row" style="color:var(--muted);font-size:12px"><span>Required per day: ${d.reqDay} Day + ${d.reqNight} Night</span><span class="sp"></span><span>Next ID ${esc(OSC.staffId(d.code, d.nextSeq || 1))}</span></div></div>`;
       }).join('')}</div>
-      <div class="note">${icon('clock')}<span>Live attendance, the tablet and billing are added in the next phases. This build (Phase 2) adds the tablet: face enrollment, punching, punches list and unrecognised faces.</span></div>`;
+      <div class="note">${icon('clock')}<span>Live attendance, the tablet and billing are added in the next phases. This build (Phase 3) turns punches into duties with your rules every 5 minutes. See Duties, and Attendance rules for the test report.</span></div>`;
   };
   // Draw at once from start-up data; refresh only if that data is older than a minute.
   if (state.boot.summary) draw(state.boot.summary); else c.innerHTML = skeleton(6);
@@ -193,6 +196,9 @@ const ROUTES = [
   [/^#\/audit$/, auditView, true],
   [/^#\/more$/, moreView, true],
   [/^#\/tablet$/, tabletView],
+  [/^#\/duties$/, dutiesView],
+  [/^#\/rules$/, rulesView],
+  [/^#\/rule-tests$/, ruleTestsView],
   [/^#\/punches$/, punchesView],
   [/^#\/unrecognised$/, unrecognisedView],
   [/^#\/password$/, () => changePasswordView(false)]
@@ -250,7 +256,7 @@ setStaleHandler(() => {
   route();
 });
 function warmUp() {
-  prefetch([['staff.list', { status: 'All' }], ['companies.list'], ['devices.list'], ['punches.byDate', { date: state.boot.today }], ['unrecognised.list', { status: 'All' }]]);
+  prefetch([['staff.list', { status: 'All' }], ['companies.list'], ['devices.list'], ['punches.byDate', { date: state.boot.today }], ['unrecognised.list', { status: 'All' }], ['exceptions.list', { status: 'Open' }]]);
 }
 
 // client-side idle sign-out (the server enforces it too)

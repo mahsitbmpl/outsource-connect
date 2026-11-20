@@ -6,6 +6,8 @@ function onOpen() {
     .addItem('1. Run setup (safe to repeat)', 'setup')
     .addItem('2. Add demo data (fake)', 'seedDemoData')
     .addItem('3. Remove demo data', 'removeDemoData')
+    .addItem('4. Start automatic processing (every 5 min)', 'installTriggers')
+    .addItem('5. Recalculate this month\'s duties', 'recalcThisMonth')
     .addSeparator()
     .addItem('Reset Admin password', 'resetAdminPassword')
     .addItem('Check password speed', 'benchmarkHash')
@@ -69,6 +71,7 @@ function setup() {
     Audit.log(null, 'setup.createAdmin', 'Users', 'admin', 'First setup', null, null);
     report.push('Admin user created');
   }
+  if (typeof RuleVersions !== 'undefined' && !Db.all('Rules').length) { RuleVersions.ensureDefault(); report.push('Default attendance rules (RV1) added'); }
   Audit.log(null, 'setup.run', 'System', APP.version, report.join('; '), null, null);
   CACHED_TABLES.forEach(function (t) { Db.invalidate(t); });
 
