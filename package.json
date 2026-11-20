@@ -1,6 +1,6 @@
 {
   "name": "outsource-connect",
-  "version": "3.0.0-phase3",
+  "version": "4.0.0-phase4",
   "private": true,
   "description": "Face-punch attendance and billing for outsourced hospital staff (Google Apps Script + GitHub Pages)",
   "scripts": {

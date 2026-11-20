@@ -10,7 +10,7 @@ Zero-cost face-punch attendance and billing for the outsourced staff (Housekeepi
 Designed and developed by IT Department, Marengo Asia Hospital, Surat.
 
 ## Status
-Phase 3 of 6 done: attendance rules engine and duties (every 5 minutes), plus Phase 2: Phase 1 (data model, staff, departments, companies and rates, sign-in, settings, audit log) plus the tablet kiosk
+Phase 4 of 6 done: dashboard, exceptions with audited fixes, penalties and deductions; Phase 3 rules engine and duties; Phase 2: Phase 1 (data model, staff, departments, companies and rates, sign-in, settings, audit log) plus the tablet kiosk
 (signed device requests, face enrollment, punching, offline queue, proof photos, unrecognised faces, tablet status).
 See `PROJECT_CONTEXT.md` for decisions, rules, the data model and the change log.
 

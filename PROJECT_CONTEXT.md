@@ -4,8 +4,8 @@
 > Rule: before changing rules or code, run the automated tests; record every change in the Change log below.
 
 ## 1. Status
-- **Phase:** 1 and 2 (v2.2) deployed by owner. 3 built and tested (20-Nov-2026), waiting for deployment + rule test report sign-off. Phase 4 (dashboard & exceptions with fix actions) next.
-- **Repo package:** outsource-connect-phase3.zip (code + docs, excludes console/config.js and kiosk/config.js). Server = apps-script/dist/Code.gs. Console = console/, Kiosk = kiosk/ on GitHub Pages.
+- **Phase:** 1, 2 (v2.2), 3 deployed by owner. 4 built and tested (20-Nov-2026), waiting for deployment + checklist. Phase 5 (reports, Excel pack, bill PDF, emails, month lock, automation) next.
+- **Repo package:** outsource-connect-phase4.zip (code + docs, excludes console/config.js and kiosk/config.js). Server = apps-script/dist/Code.gs. Console = console/, Kiosk = kiosk/ on GitHub Pages.
 - **App name (final, 20-Nov-2026):** OutSource Connect (no "Marengo" prefix). PWA short_name: "OS Connect". Footer wording "Marengo Asia Hospital, Surat" confirmed (singular).
 - **Palette (final):** B · Clinical Teal.
 - **Footer (console, login, phone):** "Designed and developed by IT Department, Marengo Asia Hospital, Surat" + app name and version.
@@ -150,6 +150,12 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Tests:** tests/core.test.js + tests/server.test.js (26 tests, node --test; server tests run the real dist/Code.gs inside tests/gas-mock.js), tests/e2e_console.py (Playwright walkthrough via tools/dev-server.js). All green on 20-Nov-2026.
 **Deviations from brief:** SheetJS not used (vendor CDN blocked) → read-excel-file 5.8.6 for .xlsx import. Lockout auto-expires after 30 min (setting) as well as Admin unlock.
 
+## 18. As built — Phase 4 (v4.0.0-phase4)
+**Server 11_actions.js:** tabs Penalties (penaltyId, date, deptCode, staffId optional, companyId charged, reason printed on bill, amount, status Active/Void) and Deductions (deductionId, date, staffId, deptCode on that date, hours, reason, status). REASON_CODES = Hospital requirement, Emergency, Transport problem, Tablet fault, Forgot to punch, Other; every action needs reasonCode + note (≥3 chars) → AuditLog. Corrections never edit tablet punches: fix.setOut / fix.addIn / fix.split / fix.assignUnrecognised append MANUAL punches (deviceId MANUAL, liveness manual, note "By <user> · <reason>"), refuse future times, ±72 h windows, same-type punch within 3 min, locked months. Decisions (decide.approve {approve true|false = all | 12 h only}, decide.grace {grace|strict}, decide.override {hours 0–72, 2 dp}, decide.shift, decide.reviewShort, decide.revoke (reopens the related exceptions)) write DutyDecisions. Each action = work + DutyEngine.recompute(staff, date−1) + mark exceptions Resolved (by, at, resolution) under ONE script lock. Pairing tie-break: same minute OUT before IN (makes split work). Duty list day rows add `rejected` (approved 12 h only).
+**Dashboard (route `dashboard`):** shiftNow by IST hour (08–20 Day), onDuty = Open duties (per dept vs reqDay/reqNight, shortage), Day today / Night last counts, open list with hours + amber/red flag, attention counts (+ unrecognised), active tablets, month-so-far (billable duties per dept, double & pending hours, deductions, penalties, estimate = Σ billable/12 × snapshot rate − deduction value; estimateNet = (estimate − penalties) × (1 + avg GST)), 30-day people-per-day trend, staff by dept & company, joiners/exits this month, today's punch feed.
+**Console:** dashboard.js (Home = Dashboard, refresh 60 s, timers 30 s, SVG trend), exceptions.js (Exceptions page with type chips and per-type buttons, unrecognised assign/photo, Penalties & deductions page with month picker; `dutyActions` reused by Duties → How? for Override / Shift / Split / Set OUT / Add IN). Nav: Dashboard, Exceptions, Penalties & deductions enabled.
+**Tests:** 125 node tests (+ actions 9 with tests/helpers.js) and browser tests e2e_console, e2e_kiosk, e2e_duties, e2e_phase4 — all green 20-Nov-2026.
+
 ## 17. As built — Phase 3 (v3.0.0-phase3)
 **shared/rules.js (`OSCRules`)** used by server (in Code.gs), console (Duties/Rules/test report) and kiosk (OUT screen): normalise(params) with validation; computeDuty(inMs, outMs, R) → {dutyDate (IN date), shift, startMs, startHow, hours, lateGrace, graceHours, endHow}; split(total) → 8/4/Double; pair(punches) (drops Duplicate/Rejected/Void and same-type repeats within dupWindowMin; IN→next OUT; IN after IN = missingOut; OUT without IN = missingIn; open > openRedH = missingOut); suggestOut (counted start + dutyHours), suggestIn (last boundary ≤ OUT − dutyHours); openFlag. Seconds dropped.
 **Start rule as built:** snap to boundary B if IN ∈ [B−earlySnapMin, B+graceMin]; else IN on a full hour starts then; else round up to next full hour; if minutes past the hour ≤ graceMin → LATE_GRACE review (grace start = that hour). Applies to any hour incl. night (e.g. 22:05).
@@ -187,6 +193,7 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Guides:** docs/PHASE2_DEPLOY.md (server update, GitHub upload, setup code, Galaxy Tab S9 FE preparation + screen pinning lock, enrollment), docs/PHASE2_CHECKLIST.md.
 
 ## 11. Change log
+- 2026-11-20 · Phase 4 · Dashboard, exceptions with fix actions (manual punches + decisions, all audited, recalculated under one lock), penalties and deductions. 125 node + 4 browser tests pass.
 - 2026-11-20 · Phase 3 · Rules engine (shared), 52 rule cases, duty processing every 5 min, exceptions, decisions model, rule versions with preview, Duties/Rules/Test report pages, kiosk OUT rule hours. 116 node + 3 browser tests pass.
 - 2026-11-20 · v2.2.0 · Console remembers page data + pre-loads common pages; bound-sheet access. Owner's v2.1 check: 9 ms password check.
 - 2026-11-20 · v2.1.0 · Fast plain-JS password hashing (2,000 rounds), server timing in replies, console draws from cached start-up data. 43 node tests + browser tests pass.
