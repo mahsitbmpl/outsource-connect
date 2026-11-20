@@ -113,7 +113,7 @@ var OSCRules = (function () {
    */
   function pair(punches, R, nowMs) {
     var list = punches.filter(function (p) { return p.status !== 'Duplicate' && p.status !== 'Rejected' && p.status !== 'Void'; })
-      .slice().sort(function (a, b) { return a.at - b.at || (a.type === 'IN' ? -1 : 1); });
+      .slice().sort(function (a, b) { return a.at - b.at || (a.type === 'OUT' ? -1 : 1); }); // same minute: close before opening (used by Split duty)
     var kept = [];
     list.forEach(function (p) { var prev = kept[kept.length - 1]; if (prev && p.at - prev.at < R.dupWindowMin * 60000 && p.type === prev.type) return; kept.push(p); });
     var out = [], open = null;

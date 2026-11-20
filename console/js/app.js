@@ -7,16 +7,19 @@ import { companiesList, companyNew, companyDetail } from './companies.js';
 import { departmentsView, usersView, settingsView, auditView } from './admin.js';
 import { tabletView, punchesView, unrecognisedView } from './kiosk-admin.js';
 import { dutiesView, rulesView, ruleTestsView } from './duties.js';
+import { dashboardView } from './dashboard.js';
+import { exceptionsView, penaltiesView } from './exceptions.js';
 
 const OSC = window.OSC;
 const FOOTER = 'Designed and developed by IT Department, Marengo Asia Hospital, Surat';
 const app = document.getElementById('app');
 
 const NAV = [
-  { href: '#/home', icon: 'layout-dashboard', label: 'Home' },
+  { href: '#/home', icon: 'layout-dashboard', label: 'Dashboard' },
   { href: '#/staff', icon: 'users', label: 'Staff' },
   { href: '#/companies', icon: 'building-2', label: 'Companies & rates' },
-  { soon: true, icon: 'triangle-alert', label: 'Exceptions' },
+  { href: '#/exceptions', icon: 'triangle-alert', label: 'Exceptions' },
+  { href: '#/penalties', icon: 'indian-rupee', label: 'Penalties & deductions' },
   { href: '#/duties', icon: 'list-checks', label: 'Duties' },
   { href: '#/punches', icon: 'clock', label: 'Punches' },
   { href: '#/unrecognised', icon: 'scan-face', label: 'Unrecognised faces' },
@@ -182,7 +185,9 @@ function moreView(c) {
 
 // ---------- router ----------
 const ROUTES = [
-  [/^#\/home$/, homeView],
+  [/^#\/home$/, dashboardView],
+  [/^#\/exceptions$/, exceptionsView],
+  [/^#\/penalties$/, penaltiesView],
   [/^#\/staff$/, staffList],
   [/^#\/staff\/new$/, staffNew],
   [/^#\/staff\/import$/, staffImport],
@@ -256,7 +261,7 @@ setStaleHandler(() => {
   route();
 });
 function warmUp() {
-  prefetch([['staff.list', { status: 'All' }], ['companies.list'], ['devices.list'], ['punches.byDate', { date: state.boot.today }], ['unrecognised.list', { status: 'All' }], ['exceptions.list', { status: 'Open' }]]);
+  prefetch([['staff.list', { status: 'All' }], ['companies.list'], ['devices.list'], ['punches.byDate', { date: state.boot.today }], ['unrecognised.list', { status: 'All' }], ['exceptions.list', { status: 'Open' }], ['dashboard']]);
 }
 
 // client-side idle sign-out (the server enforces it too)

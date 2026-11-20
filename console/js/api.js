@@ -50,7 +50,7 @@ export async function api(action, data) {
 // Pages you have opened show their last data at once; fresh data loads in the background and the
 // page redraws only if something changed. Any change you save clears the memory.
 const READS = ['staff.list', 'staff.get', 'companies.list', 'companies.get', 'departments.list', 'users.list', 'users.loginLog', 'settings.list',
-  'audit.recent', 'punches.byDate', 'duties.list', 'exceptions.list', 'rules.list', 'unrecognised.list', 'devices.list', 'home.summary', 'face.thumb', 'face.summary'];
+  'audit.recent', 'punches.byDate', 'duties.list', 'exceptions.list', 'rules.list', 'dashboard', 'penalties.list', 'deductions.list', 'decide.list', 'unrecognised.list', 'devices.list', 'home.summary', 'face.thumb', 'face.summary'];
 const memo = new Map();
 let onStale = () => {};
 export function setStaleHandler(fn) { onStale = fn; }

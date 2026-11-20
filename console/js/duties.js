@@ -1,7 +1,8 @@
 /* Phase 3 console pages: duties, rules, rule test report. */
 import { api, apiFast } from './api.js';
 import { esc, icon, toast, dialog, field, formData, skeleton, emptyState, setTitle, toCSV, download, showErrors, $, $$ } from './ui.js';
-import { state, isAdmin, today, deptName } from './state.js';
+import { state, isAdmin, today, deptName, go } from './state.js';
+import { dutyActions } from './exceptions.js';
 
 const OSC = window.OSC, RULES = window.OSCRules;
 const clock = (iso) => (iso ? OSC.fmtDateTime(iso).slice(12) : '—');
@@ -73,7 +74,21 @@ function explain(d) {
       <dt>Counted from</dt><dd>${esc(OSC.fmtDateTime(d.startAt) || '—')}</dd><dt>Steps</dt><dd>${esc(d.explain)}</dd><dt>System hours</dt><dd>${esc(h2(d.systemHours))}</dd>
       ${d.lateGrace ? `<dt>With grace</dt><dd>${esc(h2(d.graceHours))} (Ops manager decides)</dd>` : ''}<dt>Final hours</dt><dd><b>${esc(h2(d.finalHours))}</b> ${esc(d.finalSource || '')}</dd>
       <dt>Shift</dt><dd>${esc(d.shift)}</dd><dt>Company and rate</dt><dd>${esc(d.companyId)} · ${d.ratePerDuty ? esc(OSC.fmtINR(d.ratePerDuty)) + ' + GST ' + esc(d.gstPct) + '%' : 'no rate card for this date'}</dd>
-      <dt>Rule version</dt><dd>${esc(d.ruleId)}</dd></dl>` });
+      <dt>Rule version</dt><dd>${esc(d.ruleId)}</dd></dl>
+      <div class="row" style="margin-top:14px">${d.inAt && d.outAt ? '<button type="button" class="btn ghost sm" data-da="override">Override hours</button><button type="button" class="btn ghost sm" data-da="shift">Change shift tag</button>' : ''}
+        ${d.status === 'Closed' && d.systemHours > 24 ? '<button type="button" class="btn ghost sm" data-da="split">Split duty</button>' : ''}
+        ${d.inAt && !d.outAt ? '<button type="button" class="btn primary sm" data-da="setOut">Set OUT</button>' : ''}${!d.inAt && d.outAt ? '<button type="button" class="btn primary sm" data-da="addIn">Add IN</button>' : ''}</div>`,
+    onOpen: (form) => {
+      form.querySelectorAll('[data-da]').forEach((b) => {
+        b.onclick = async () => {
+          form.closest('.scrim').remove();
+          const a = b.dataset.da, R0 = window.OSCRules.normalise({}).rules;
+          const sugg = a === 'setOut' ? OSC.nowISTString(window.OSCRules.suggestOut(Date.parse(d.inAt), R0)) : a === 'addIn' ? OSC.nowISTString(window.OSCRules.suggestIn(Date.parse(d.outAt), R0)) : null;
+          const r = await dutyActions[a](d, sugg);
+          if (r) go(location.hash);
+        };
+      });
+    } });
 }
 
 // ---------- rules ----------

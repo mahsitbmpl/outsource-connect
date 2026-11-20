@@ -239,9 +239,9 @@ var DutyEngine = (function () {
     var days = Object.keys(groups).map(function (k) {
       var list = groups[k], R = RuleVersions.forDate(list[0].dutyDate, list[0].deptCode).rules;
       var total = OSCRules.r2(list.reduce(function (a, d) { return a + (Number(d.finalHours) || 0); }, 0)), sp = OSCRules.split(total, R);
-      var approved = !!dec['APPROVE:' + k] || !R.over12NeedsApproval;
+      var ad = dec['APPROVE:' + k], approved = !R.over12NeedsApproval || !!(ad && (ad.value || {}).approved !== false);
       return { key: k, staffId: list[0].staffId, name: list[0].name, dutyDate: list[0].dutyDate, deptCode: list[0].deptCode, total: total, h8: sp.h8, h4: sp.h4, dd: sp.dd,
-        pending: approved ? 0 : sp.dd, billable: OSCRules.r2(total - (approved ? 0 : sp.dd)), open: list.some(function (d) { return d.status !== 'Closed'; }) };
+        pending: approved || ad ? 0 : sp.dd, rejected: ad && !approved ? sp.dd : 0, billable: OSCRules.r2(total - (approved ? 0 : sp.dd)), open: list.some(function (d) { return d.status !== 'Closed'; }) };
     });
     return { duties: rows, days: days, lastRun: props().getProperty('DUTIES_LAST_RUN') || '' };
   }
