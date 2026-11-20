@@ -10,7 +10,7 @@ Zero-cost face-punch attendance and billing for the outsourced staff (Housekeepi
 Designed and developed by IT Department, Marengo Asia Hospital, Surat.
 
 ## Status
-Phase 2 of 6 done: Phase 1 (data model, staff, departments, companies and rates, sign-in, settings, audit log) plus the tablet kiosk
+Phase 3 of 6 done: attendance rules engine and duties (every 5 minutes), plus Phase 2: Phase 1 (data model, staff, departments, companies and rates, sign-in, settings, audit log) plus the tablet kiosk
 (signed device requests, face enrollment, punching, offline queue, proof photos, unrecognised faces, tablet status).
 See `PROJECT_CONTEXT.md` for decisions, rules, the data model and the change log.
 
@@ -19,7 +19,9 @@ See `PROJECT_CONTEXT.md` for decisions, rules, the data model and the change log
 |---|---|
 | `apps-script/src/` | Server source, split by topic. |
 | `apps-script/dist/Code.gs` | **The file you paste into Apps Script** (built from `shared/` + `apps-script/src/`). |
-| `shared/osc-core.js` | Validation and Indian formatting used by both the server and the console. |
+| `shared/osc-core.js` | Validation and Indian formatting used by the server, console and tablet. |
+| `shared/rules.js` | The attendance rules engine (hours, split, pairing), one file for server, console and tablet. |
+| `shared/rule-cases.js` | The 52 rule test cases, run by the tests and shown in the console's Rule test report. |
 | `console/` | The console website. Only `console/config.js` needs your Web app URL. |
 | `kiosk/` | The tablet app. Only `kiosk/config.js` needs your Web app URL. The tablet's secret is typed on the tablet, never stored here. |
 | `docs/` | Deployment guide and checklists. |

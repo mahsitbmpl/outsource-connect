@@ -4,8 +4,8 @@
 > Rule: before changing rules or code, run the automated tests; record every change in the Change log below.
 
 ## 1. Status
-- **Phase:** 1 deployed by owner (20-Nov-2026, checklist done). 2 built and tested (20-Nov-2026), waiting for owner deployment + tablet checklist. Phase 3 (rule engine & duties) next.
-- **Repo package:** outsource-connect-phase2.zip (code + docs, excludes console/config.js). Server = apps-script/dist/Code.gs. Console = console/, Kiosk = kiosk/ on GitHub Pages.
+- **Phase:** 1 and 2 (v2.2) deployed by owner. 3 built and tested (20-Nov-2026), waiting for deployment + rule test report sign-off. Phase 4 (dashboard & exceptions with fix actions) next.
+- **Repo package:** outsource-connect-phase3.zip (code + docs, excludes console/config.js and kiosk/config.js). Server = apps-script/dist/Code.gs. Console = console/, Kiosk = kiosk/ on GitHub Pages.
 - **App name (final, 20-Nov-2026):** OutSource Connect (no "Marengo" prefix). PWA short_name: "OS Connect". Footer wording "Marengo Asia Hospital, Surat" confirmed (singular).
 - **Palette (final):** B · Clinical Teal.
 - **Footer (console, login, phone):** "Designed and developed by IT Department, Marengo Asia Hospital, Surat" + app name and version.
@@ -150,6 +150,15 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Tests:** tests/core.test.js + tests/server.test.js (26 tests, node --test; server tests run the real dist/Code.gs inside tests/gas-mock.js), tests/e2e_console.py (Playwright walkthrough via tools/dev-server.js). All green on 20-Nov-2026.
 **Deviations from brief:** SheetJS not used (vendor CDN blocked) → read-excel-file 5.8.6 for .xlsx import. Lockout auto-expires after 30 min (setting) as well as Admin unlock.
 
+## 17. As built — Phase 3 (v3.0.0-phase3)
+**shared/rules.js (`OSCRules`)** used by server (in Code.gs), console (Duties/Rules/test report) and kiosk (OUT screen): normalise(params) with validation; computeDuty(inMs, outMs, R) → {dutyDate (IN date), shift, startMs, startHow, hours, lateGrace, graceHours, endHow}; split(total) → 8/4/Double; pair(punches) (drops Duplicate/Rejected/Void and same-type repeats within dupWindowMin; IN→next OUT; IN after IN = missingOut; OUT without IN = missingIn; open > openRedH = missingOut); suggestOut (counted start + dutyHours), suggestIn (last boundary ≤ OUT − dutyHours); openFlag. Seconds dropped.
+**Start rule as built:** snap to boundary B if IN ∈ [B−earlySnapMin, B+graceMin]; else IN on a full hour starts then; else round up to next full hour; if minutes past the hour ≤ graceMin → LATE_GRACE review (grace start = that hour). Applies to any hour incl. night (e.g. 22:05).
+**shared/rule-cases.js:** 52 cases (9 required incl. R9 = 11.0 under owner rule, 11 late, 6 early, 7 leaving early, 5 extra, 4 long, 6 dates, 4 shift tag). tests/rules.test.js = 52 + 12 more (pairing, suggestions, split, validation, versions, seconds) = 64.
+**Server 10_duties.js:** tabs Rules (RV1 = defaults from 2020-01-01, versions start on the 1st, not in/after locked months, per dept or ALL), Duties_<year> (dutyId = IN punchId or 'MI-'+OUT punchId; status Closed/Open/MissingOut/MissingIn/Void; systemHours, graceHours, finalHours + finalSource system/grace/override; snapshot dept/designation/company/rate/GST/ruleId; explain text), Exceptions (id = TYPE:subject; types MISSING_OUT, MISSING_IN, LATE_GRACE, LONG_DUTY (staff:date), SHORT_DUTY (staff:date, closed and last OUT > 1 h ago); Open → AutoClosed when cause disappears; Resolved kept), DutyDecisions (keys GRACE:<dutyId> {choice}, FINAL:<dutyId> {hours}, SHIFT:<dutyId> {shift}, APPROVE:<staff>:<date>, REVIEW:SHORT_DUTY:<staff>:<date>; written by Phase 4 UI). BlockTable = read tail of a tab once, edit in memory, write back in one setValues (falls back to whole tab when the window is older than the tail). DutyEngine.processNew (trigger every 5 min: new rows per yearly punch tab via PUNCH_DONE_<year> cursor + open duties; recompute window from earliest new punch − 1 day, reading punches from −3 days), rebuild(from) (Admin, ≤ 62 days), list(from,to) incl. per-date split/pending/billable, preview(params) (no writes), exceptions(status). Locked months never rewritten. Menu: 4. Start automatic processing, 5. Recalculate this month's duties.
+**API:** duties.list, duties.processNow (APP), duties.rebuild (ADMIN), rules.list (APP), rules.add, rules.preview (ADMIN), exceptions.list (APP). kiosk sync config carries current rules.
+**Console:** duties.js — Duties page (Duties / Per person per date / Needs attention tabs, How? dialog, CSV, Process now), Attendance rules page (Admin nav), Rule test report (#/rule-tests, printable). Kiosk 3.0.0 OUT screen = rule hours.
+**Tests:** 116 node tests (core 11, server 17, kiosk 15, rules 64, duties 9) + browser tests e2e_console, e2e_kiosk, e2e_duties (dev-server --punches seeds late/missing/double cases). All green 20-Nov-2026.
+
 ## 16. v2.2.0 navigation speed (20-Nov-2026)
 - Owner: password check now 9 ms (create 26 ms) at 2,000 rounds; page changes took 5–7 s.
 - Console `apiFast` (api.js): read actions remembered in memory; a page shows remembered data at once, refreshes in the background, redraws only if data changed (not while typing or with a dialog open). Any successful write clears the memory. After sign-in, staff, companies, tablets, today's punches and unrecognised faces are pre-loaded.
@@ -178,6 +187,7 @@ Phase 0 answers (20-Nov-2026). Every question not listed here = proposed default
 **Guides:** docs/PHASE2_DEPLOY.md (server update, GitHub upload, setup code, Galaxy Tab S9 FE preparation + screen pinning lock, enrollment), docs/PHASE2_CHECKLIST.md.
 
 ## 11. Change log
+- 2026-11-20 · Phase 3 · Rules engine (shared), 52 rule cases, duty processing every 5 min, exceptions, decisions model, rule versions with preview, Duties/Rules/Test report pages, kiosk OUT rule hours. 116 node + 3 browser tests pass.
 - 2026-11-20 · v2.2.0 · Console remembers page data + pre-loads common pages; bound-sheet access. Owner's v2.1 check: 9 ms password check.
 - 2026-11-20 · v2.1.0 · Fast plain-JS password hashing (2,000 rounds), server timing in replies, console draws from cached start-up data. 43 node tests + browser tests pass.
 - 2026-11-20 · Phase 2 · Owner deployed Phase 1; password check 2,112 ms → rounds lowered to 1,000 with rehash on sign-in. Built kiosk app, device signing, enrollment, punches, unrecognised faces, Tablet/Punches/Unrecognised console pages, tablet lock guide. 42 node tests + 2 browser tests pass. Test-server fix: forward raw signed requests.

@@ -90,6 +90,8 @@ function makeEnv(opts) {
         remove: (k) => { cacheStore.delete(k); }
       })
     },
+    ScriptApp: (() => { const trig = []; return { triggers: trig, getProjectTriggers: () => trig.slice(), deleteTrigger: (t) => { trig.splice(trig.indexOf(t), 1); },
+      newTrigger: (fn) => { const b = { timeBased: () => b, everyMinutes: (m) => { b.m = m; return b; }, everyDays: () => b, atHour: () => b, create: () => { const t = { getHandlerFunction: () => fn, m: b.m }; trig.push(t); return t; } }; return b; } }; })(),
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => props.set(k, String(v)), deleteProperty: (k) => props.delete(k) }) },
     DriveApp: { createFolder: (n) => makeFolder(n), getFolderById: (id) => { if (!folders.has(id)) throw new Error('no folder'); return folders.get(id); },
