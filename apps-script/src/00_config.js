@@ -1,7 +1,7 @@
 /* ===== 00 Config: app constants and sheet schema ===== */
 var APP = {
   name: 'OutSource Connect',
-  version: '5.0.0-phase5',
+  version: '6.0.0',
   tz: 'Asia/Kolkata',
   roles: { ADMIN: 'ADMIN', OPS: 'OPS' }
 };
@@ -21,7 +21,7 @@ var SCHEMA = {
   Users: { key: 'username', cols: [['username', 'str'], ['fullName', 'str'], ['role', 'str'], ['active', 'bool'], ['pwHash', 'str'], ['mustChange', 'bool'], ['failedCount', 'num'], ['lockedUntil', 'datetime'], ['lastLoginAt', 'datetime'], ['pwChangedAt', 'datetime'], ['createdAt', 'datetime'], ['createdBy', 'str'], ['updatedAt', 'datetime'], ['updatedBy', 'str']] },
   Sessions: { key: 'sid', cols: [['sid', 'str'], ['username', 'str'], ['createdAt', 'datetime'], ['expiresAt', 'datetime'], ['lastSeenAt', 'datetime'], ['revoked', 'bool'], ['userAgent', 'str']] },
   LoginLog: { log: true, cols: [['at', 'datetime'], ['username', 'str'], ['result', 'str'], ['detail', 'str'], ['userAgent', 'str']] },
-  AuditLog: { log: true, cols: [['auditId', 'str'], ['at', 'datetime'], ['username', 'str'], ['action', 'str'], ['entity', 'str'], ['entityId', 'str'], ['reason', 'str'], ['before', 'json'], ['after', 'json']] },
+  AuditLog: { log: true, chain: true, cols: [['auditId', 'str'], ['at', 'datetime'], ['username', 'str'], ['action', 'str'], ['entity', 'str'], ['entityId', 'str'], ['reason', 'str'], ['before', 'json'], ['after', 'json'], ['hash', 'str']] },
   MonthLocks: { key: 'lockId', cols: [['lockId', 'str'], ['month', 'str'], ['deptCode', 'str'], ['status', 'str'], ['lockedAt', 'datetime'], ['lockedBy', 'str'], ['unlockedAt', 'datetime'], ['unlockedBy', 'str'], ['unlockReason', 'str']] },
   // ----- Phase 2: tablet, faces, punches -----
   Devices: { key: 'deviceId', cols: [['deviceId', 'str'], ['name', 'str'], ['active', 'bool'], ['createdAt', 'datetime'], ['createdBy', 'str'], ['revokedAt', 'datetime'], ['revokedBy', 'str'], ['lastSeenAt', 'datetime'], ['appVersion', 'str'], ['battery', 'num'], ['charging', 'bool'], ['queueSize', 'num'], ['cameraOk', 'bool'], ['lastPunchAt', 'datetime'], ['backend', 'str'], ['userAgent', 'str']] },
@@ -74,10 +74,10 @@ var PBKDF2_ITERATIONS = 2000; // stored inside each hash; older hashes are re-ma
 var CACHED_TABLES = ['Settings', 'Departments', 'Companies', 'Rates', 'Staff', 'Users', 'MonthLocks', 'Devices'];
 
 /* Punches live in one tab per year (Punches_2026, Punches_2027 ...). Rows are never edited or deleted. */
-var PUNCH_COLS = [['punchId', 'str'], ['staffId', 'str'], ['type', 'str'], ['at', 'datetime'], ['deviceTime', 'datetime'], ['receivedAt', 'datetime'], ['deviceId', 'str'], ['distance', 'num'], ['liveness', 'str'], ['offline', 'bool'], ['status', 'str'], ['photoFileId', 'str'], ['note', 'str']];
+var PUNCH_COLS = [['punchId', 'str'], ['staffId', 'str'], ['type', 'str'], ['at', 'datetime'], ['deviceTime', 'datetime'], ['receivedAt', 'datetime'], ['deviceId', 'str'], ['distance', 'num'], ['liveness', 'str'], ['offline', 'bool'], ['status', 'str'], ['photoFileId', 'str'], ['note', 'str'], ['hash', 'str']];
 function punchTable(year) {
   var n = 'Punches_' + year;
-  if (!SCHEMA[n]) SCHEMA[n] = { key: 'punchId', log: true, cols: PUNCH_COLS };
+  if (!SCHEMA[n]) SCHEMA[n] = { key: 'punchId', log: true, chain: true, cols: PUNCH_COLS };
   return n;
 }
 punchTable(new Date(Date.now() + 19800000).getUTCFullYear());

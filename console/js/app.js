@@ -10,6 +10,7 @@ import { dutiesView, rulesView, ruleTestsView } from './duties.js';
 import { dashboardView } from './dashboard.js';
 import { exceptionsView, penaltiesView } from './exceptions.js';
 import { monthView, compareView, automationView } from './month.js';
+import { healthView, parallelView } from './golive.js';
 
 const OSC = window.OSC;
 const FOOTER = 'Designed and developed by IT Department, Marengo Asia Hospital, Surat';
@@ -26,7 +27,8 @@ const NAV = [
   { href: '#/unrecognised', icon: 'scan-face', label: 'Unrecognised faces' },
   { href: '#/tablet', icon: 'tablet-smartphone', label: 'Tablet' },
   { href: '#/month', icon: 'file-text', label: 'Month-end pack' },
-  { href: '#/compare', icon: 'scale', label: 'Compare & what-if' }
+  { href: '#/compare', icon: 'scale', label: 'Compare & what-if' },
+  { href: '#/parallel', icon: 'list-checks', label: 'Parallel run check' }
 ];
 const ADMIN_NAV = [
   { href: '#/rules', icon: 'scale', label: 'Attendance rules' },
@@ -34,6 +36,7 @@ const ADMIN_NAV = [
   { href: '#/users', icon: 'shield-check', label: 'Users' },
   { href: '#/settings', icon: 'settings', label: 'Settings' },
   { href: '#/automation', icon: 'zap', label: 'Automation & emails' },
+  { href: '#/health', icon: 'shield-check', label: 'System health' },
   { href: '#/audit', icon: 'history', label: 'Audit log' }
 ];
 
@@ -195,6 +198,8 @@ const ROUTES = [
   [/^#\/month$/, monthView],
   [/^#\/compare$/, compareView],
   [/^#\/automation$/, automationView, true],
+  [/^#\/health$/, healthView, true],
+  [/^#\/parallel$/, parallelView],
   [/^#\/staff$/, staffList],
   [/^#\/staff\/new$/, staffNew],
   [/^#\/staff\/import$/, staffImport],

@@ -64,7 +64,7 @@ var MonthEnd = (function () {
       return { date: x.date, staffId: x.staffId, name: s ? s.title + ' ' + s.fullName : '', reason: x.reason, amount: x.amount, companyId: x.companyId };
     });
     var staffIds = {}; days.forEach(function (d) { staffIds[d.staffId] = 1; }); Object.keys(members).forEach(function (k) { staffIds[members[k].staffId] = 1; });
-    var exc = Db.where('Exceptions', function (x) { return x.status === 'Open' && x.dutyDate && x.dutyDate.slice(0, 7) === ym && staffIds[x.staffId]; });
+    var exc = BlockTable('Exceptions', 3000, from, 'dutyDate', to).rows().filter(function (x) { return x.status === 'Open' && x.dutyDate && x.dutyDate.slice(0, 7) === ym && staffIds[x.staffId]; });
     var companies = {};
     days.forEach(function (d) { if (d.companyId) companies[d.companyId] = 1; });
     Object.keys(members).forEach(function (k) { if (members[k].companyId) companies[members[k].companyId] = 1; });

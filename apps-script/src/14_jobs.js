@@ -5,7 +5,7 @@ DEFAULT_SETTINGS.backupDay = ['Sun', 'weekday', 'Weekly backup day (Mon, Tue, We
 DEFAULT_SETTINGS.backupTime = ['02:00', 'time', 'Weekly backup time (24-hour HH:MM)'];
 DEFAULT_SETTINGS.backupKeep = ['8', 'int', 'Number of weekly backups kept in Google Drive'];
 DEFAULT_SETTINGS.draftPackTime = ['07:00', 'time', 'On the 1st of each month, draft packs for the previous month are made at this time'];
-DEFAULT_SETTINGS.dataKeepYears = ['3', 'int', 'Full years of punches and duties kept in the main sheet (older years move to an archive file)'];
+DEFAULT_SETTINGS.dataKeepYears = ['2', 'int', 'Past full years of punches, duties and logs kept in the main sheet besides the current year (older ones move to an archive file in Drive). 2 keeps up to 3 years; more than 3 can exceed Google\'s cell limit'];
 
 var Jobs = (function () {
   var WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -132,7 +132,8 @@ var Jobs = (function () {
       if (!m || +m[2] >= keepFrom) return;
       out.archived.push(archiveSheet(sh, +m[2]));
     });
-    if (out.created.length || out.archived.length) out.logged = true;
+    if (t.month === 1 || t.month === 12) out.oldRows = Archive.oldRows(keepFrom + '-01-01');
+    if (out.created.length || out.archived.length || (out.oldRows && out.oldRows.length)) out.logged = true;
     return out;
   }
   /** Copies an old yearly tab to "OutSource Connect archive YYYY" in Drive, checks the copy, then removes it from the main sheet. */
@@ -177,7 +178,9 @@ function processPunchesJob() {
   var t0 = Date.now();
   try { DutyEngine.processNew(); } catch (e) { console.error('processNew failed: ' + (e && e.stack || e)); }
   Db.reset();
-  return Jobs.tick(t0);
+  var ran = Jobs.tick(t0);
+  try { Health.addRuntime(Date.now() - t0); } catch (e) { /* ignore */ }
+  return ran;
 }
 function installTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (['processPunchesJob'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });

@@ -340,7 +340,7 @@ var Kiosk = (function () {
     var d = OSC.parseDate(dateIso) || Clock.today(), t = punchTable(d.slice(0, 4));
     if (!Db.ss().getSheetByName(t)) return [];
     var staff = {}; Db.all('Staff').forEach(function (s) { staff[s.staffId] = s; });
-    return Db.tail(t, 4000).filter(function (p) { return p.at.slice(0, 10) === d; }).map(function (p) {
+    return BlockTable(t, 4000, d + 'T00:00', 'at', d).rows().filter(function (p) { return p.at.slice(0, 10) === d; }).map(function (p) {
       var s = staff[p.staffId] || {};
       return { punchId: p.punchId, staffId: p.staffId, name: s.title ? s.title + ' ' + s.fullName : p.staffId, deptCode: s.deptCode, type: p.type, at: p.at,
         receivedAt: p.receivedAt, offline: p.offline, status: p.status, distance: p.distance, liveness: p.liveness, hasPhoto: !!p.photoFileId, note: p.note };

@@ -9,6 +9,7 @@ function onOpen() {
     .addItem('4. Start automatic processing (every 5 min)', 'installTriggers')
     .addItem('5. Recalculate this month\'s duties', 'recalcThisMonth')
     .addItem('6. Send a test email', 'sendTestEmail')
+    .addItem('7. Restore from a backup…', 'restoreFromBackup')
     .addSeparator()
     .addItem('Reset Admin password', 'resetAdminPassword')
     .addItem('Check password speed', 'benchmarkHash')

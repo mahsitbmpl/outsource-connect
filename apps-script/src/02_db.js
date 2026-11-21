@@ -111,11 +111,42 @@ var Db = (function () {
   }
   function where(table, fn) { return all(table).filter(fn); }
 
+  // ----- tamper evidence: chained SHA-256 over each new row of log tables (SCHEMA[t].chain) -----
+  function rowHash(prev, h, row) {
+    var parts = [prev || ''];
+    for (var i = 0; i < h.length; i++) {
+      if (h[i] === 'hash') continue;
+      var v = row[i] == null ? '' : row[i];
+      if (typeof v === 'string' && /^'[=+\-@\t\r]/.test(v)) v = v.slice(1); // Sheets may or may not keep the protective apostrophe
+      parts.push(v === true ? 'true' : v === false ? 'false' : String(v));
+    }
+    var bytes = utf8Of(parts.join('\u001f'));
+    var out = FastHash.sha256(bytes), hex = '';
+    for (var j = 0; j < out.length; j++) hex += (out[j] < 16 ? '0' : '') + out[j].toString(16);
+    return hex;
+  }
+  function utf8Of(str) { var o = []; for (var i = 0; i < str.length; i++) { var c = str.charCodeAt(i); if (c < 128) o.push(c); else if (c < 2048) o.push(192 | c >> 6, 128 | c & 63); else o.push(224 | c >> 12, 128 | c >> 6 & 63, 128 | c & 63); } return Uint8Array.from(o); }
+  function chainHead(table) {
+    var P = PropertiesService.getScriptProperties(), k = 'CHAIN_' + table, v = P.getProperty(k);
+    if (v !== null) return v;
+    var sh = sheet(table), h = headers(table), last = sh.getLastRow(), hi = h.indexOf('hash');
+    return last >= 2 && hi >= 0 ? String(sh.getRange(last, hi + 1).getValues()[0][0] || '') : '';
+  }
+  function chainRows(table, h, rows) {
+    if (!schema(table).chain) return rows;
+    var hi = h.indexOf('hash'); if (hi < 0) return rows;
+    return withLock(function () {
+      var prev = chainHead(table);
+      rows.forEach(function (row) { row[hi] = rowHash(prev, h, row); prev = row[hi]; });
+      PropertiesService.getScriptProperties().setProperty('CHAIN_' + table, prev);
+      return rows;
+    });
+  }
+
   function insert(table, obj) {
-    var sh = sheet(table), h = headers(table);
-    var row = objToRow(table, h, obj);
-    var r = sh.getLastRow() + 1;
-    sh.getRange(r, 1, 1, h.length).setValues([row]);
+    var sh = sheet(table), h = headers(table), r;
+    var write = function () { var row = chainRows(table, h, [objToRow(table, h, obj)])[0]; r = sh.getLastRow() + 1; sh.getRange(r, 1, 1, h.length).setValues([row]); };
+    if (schema(table).chain) withLock(write); else write();
     invalidate(table);
     var out = {}; Object.keys(obj).forEach(function (k) { out[k] = obj[k]; }); out._row = r;
     return out;
@@ -124,7 +155,8 @@ var Db = (function () {
     if (!objs.length) return;
     var sh = sheet(table), h = headers(table);
     var rows = objs.map(function (o) { return objToRow(table, h, o); });
-    sh.getRange(sh.getLastRow() + 1, 1, rows.length, h.length).setValues(rows);
+    if (schema(table).chain) withLock(function () { chainRows(table, h, rows); sh.getRange(sh.getLastRow() + 1, 1, rows.length, h.length).setValues(rows); });
+    else sh.getRange(sh.getLastRow() + 1, 1, rows.length, h.length).setValues(rows);
     invalidate(table);
   }
   /** Updates a row found by key; returns {before, after}. */
@@ -142,7 +174,30 @@ var Db = (function () {
   /** Append-only tables (logs). */
   function append(table, obj) {
     var sh = sheet(table), h = headers(table);
-    sh.appendRow(objToRow(table, h, obj));
+    if (schema(table).chain) withLock(function () { sh.appendRow(chainRows(table, h, [objToRow(table, h, obj)])[0]); });
+    else sh.appendRow(objToRow(table, h, obj));
+  }
+  /** Re-checks a chained table: every row's hash must follow from the row before. Returns a short report. */
+  function verifyChain(table) {
+    var sh = sheet(table), h = headers(table), hi = h.indexOf('hash'), last = sh.getLastRow(), P = PropertiesService.getScriptProperties();
+    var rep = { table: table, rows: Math.max(0, last - 1), checked: 0, notCovered: 0, ok: true, firstBadRow: null, problem: '' };
+    if (hi < 0 || last < 2) return rep;
+    var vals = sh.getRange(2, 1, last - 1, h.length).getValues(), prev = null;
+    for (var i = 0; i < vals.length; i++) {
+      var stored = String(vals[i][hi] || '');
+      if (!stored) { if (prev === null) { rep.notCovered++; continue; } rep.ok = false; rep.firstBadRow = i + 2; rep.problem = 'Row without a check code after protected rows (row added by hand?)'; return rep; }
+      if (prev === null) prev = P.getProperty('CHAIN_START_' + table) || '';
+      var want = rowHash(prev, h, vals[i]);
+      if (want !== stored) {
+        // the first protected row may follow archived rows; accept it once if the start marker is unknown
+        if (rep.checked === 0 && !P.getProperty('CHAIN_START_' + table)) { prev = stored; rep.checked++; continue; }
+        rep.ok = false; rep.firstBadRow = i + 2; rep.problem = 'Row ' + (i + 2) + ' was changed, or a row before it was removed'; return rep;
+      }
+      prev = stored; rep.checked++;
+    }
+    var head = P.getProperty('CHAIN_' + table);
+    if (head !== null && prev !== null && head !== prev) { rep.ok = false; rep.firstBadRow = last; rep.problem = 'The newest rows were removed or replaced'; }
+    return rep;
   }
   /** Last n rows of a table, newest first, without reading the whole sheet. */
   function tail(table, n) {
@@ -187,6 +242,8 @@ var Db = (function () {
         sh.getRange(1, col, sh.getMaxRows(), 1).setNumberFormat('@');
       }
     });
+    // Google counts every cell of a tab towards the 10 million limit, so remove the empty columns a new tab comes with
+    try { var maxC = sh.getMaxColumns(); if (maxC > existing.length) sh.deleteColumns(existing.length + 1, maxC - existing.length); } catch (e) { /* keep going */ }
     delete headerMemo[table];
     return added.map(function (c) { return c[0]; });
   }
@@ -196,12 +253,16 @@ var Db = (function () {
   return {
     ss: ss, sheet: sheet, headers: headers, all: all, find: find, where: where, insert: insert,
     insertMany: insertMany, update: update, append: append, tail: tail, deleteWhere: deleteWhere,
-    ensureTable: ensureTable, invalidate: invalidate, reset: reset, fromCell: fromCell, toCell: toCell
+    ensureTable: ensureTable, invalidate: invalidate, reset: reset, fromCell: fromCell, toCell: toCell, verifyChain: verifyChain, rowHash: rowHash, chainHead: chainHead
   };
 })();
 
-function withLock(fn) {
+/* One script-wide lock. Nested calls in the same run reuse the lock instead of waiting for themselves. */
+var LOCK_DEPTH = 0;
+function withLock(fn, waitMs, onBusy) {
+  if (LOCK_DEPTH > 0) { LOCK_DEPTH++; try { return fn(); } finally { LOCK_DEPTH--; } }
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(20000)) fail('BUSY', 'The system is busy. Please try again in a few seconds.');
-  try { return fn(); } finally { lock.releaseLock(); }
+  if (!lock.tryLock(waitMs || 20000)) { if (onBusy) return onBusy(); fail('BUSY', 'The system is busy. Please try again in a few seconds.'); }
+  LOCK_DEPTH = 1;
+  try { return fn(); } finally { LOCK_DEPTH = 0; lock.releaseLock(); }
 }

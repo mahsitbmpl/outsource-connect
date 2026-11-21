@@ -43,38 +43,62 @@ var RuleVersions = {
   }
 };
 
-/* ---------- block store: read the recent end of a tab once, change rows in memory, write back in one call ---------- */
-function BlockTable(table, tailRows, minDate, dateField) {
+/* ---------- block store: read only the rows a job needs, change them in memory, write back in one call ----------
+ * minDate/maxDate (optional) limit the rows by dateField. Rows are appended roughly in date order, so the date column is read
+ * first (one narrow read) and only the block from the first row on/after minDate to the last row on/before maxDate is loaded.
+ * Every row with a date in [minDate, maxDate] lies inside that block, even when an old date was appended late. */
+function BlockTable(table, tailRows, minDate, dateField, maxDate) {
   var sh = Db.sheet(table), h = Db.headers(table), types = {};
   SCHEMA[table].cols.forEach(function (c) { types[c[0]] = c[1]; });
   var key = SCHEMA[table].key, last = sh.getLastRow();
-  var start = Math.max(2, last - tailRows + 1);
-  function read(from) {
-    if (last < from) return [];
-    return sh.getRange(from, 1, last - from + 1, h.length).getValues().map(function (row) {
+  var start = Math.max(2, last - tailRows + 1), end = last;
+  function read(from, to) {
+    if (to < from || last < from) return [];
+    return sh.getRange(from, 1, to - from + 1, h.length).getValues().map(function (row) {
       var o = {}; h.forEach(function (name, i) { if (types[name]) o[name] = Db.fromCell(types[name], row[i]); }); return o;
     });
   }
-  var rows = read(start);
-  // if the window needs older rows than the tail holds, read the whole tab
-  if (start > 2 && minDate && rows.length && rows.reduce(function (m, r) { return r[dateField] < m ? r[dateField] : m; }, '9999') > minDate) { start = 2; rows = read(2); }
+  if ((minDate || maxDate) && dateField && last >= 2 && h.indexOf(dateField) >= 0) {
+    var ci = h.indexOf(dateField) + 1, from = start;
+    var colRead = function (f) { return sh.getRange(f, ci, last - f + 1, 1).getValues().map(function (r) { return String(Db.fromCell(types[dateField], r[0])); }); };
+    var dates = colRead(from);
+    // the tail starts inside the window (its first rows are already on/after minDate), or a range ends before the tail: look at the whole column
+    if (from > 2 && ((minDate && dates.slice(0, 50).some(function (d) { return d >= minDate; })) || (maxDate && dates.length && dates[0] > maxDate))) { from = 2; dates = colRead(2); }
+    var first = -1, lastIdx = -1;
+    for (var i = 0; i < dates.length; i++) {
+      if (first < 0 && (!minDate || dates[i] >= minDate)) first = i;
+      if (!maxDate || dates[i].slice(0, maxDate.length) <= maxDate) lastIdx = i;
+    }
+    if (first < 0 || lastIdx < first) { start = last + 1; end = last; } else { start = from + first; end = from + lastIdx; }
+  }
+  var rows = read(start, end);
   var index = {}; rows.forEach(function (r, i) { index[r[key]] = i; });
-  var added = [], dirty = false;
+  var added = [], dirty = false, lo = Infinity, hi = -1;
+  // a blank cell reads back as '' or null depending on the column type; both mean "empty"
+  function same(a, b) { var ea = a === '' || a == null, eb = b === '' || b == null; if (ea || eb) return ea && eb; if (typeof a === 'number' || typeof b === 'number') return Number(a) === Number(b); return JSON.stringify(a) === JSON.stringify(b); }
   return {
     rows: function () { return rows.concat(added); },
-    get: function (k) { return index[k] != null ? rows[index[k]] : null; },
+    get: function (k) { return index[k] != null ? (index[k] < rows.length ? rows[index[k]] : added[index[k] - rows.length]) : null; },
     put: function (o) {
-      if (index[o[key]] != null) { var cur = rows[index[o[key]]], ch = false; Object.keys(o).forEach(function (f) { if (JSON.stringify(cur[f]) !== JSON.stringify(o[f])) { cur[f] = o[f]; ch = true; } }); if (ch) dirty = true; return ch; }
+      if (index[o[key]] != null && index[o[key]] < rows.length) {
+        var at = index[o[key]], cur = rows[at], ch = false;
+        Object.keys(o).forEach(function (f) { if (!same(cur[f], o[f])) { cur[f] = o[f]; ch = true; } });
+        if (ch) { dirty = true; lo = Math.min(lo, at); hi = Math.max(hi, at); }
+        return ch;
+      }
+      if (index[o[key]] != null) { var ad = added[index[o[key]] - rows.length]; Object.keys(o).forEach(function (f) { ad[f] = o[f]; }); return true; }
       index[o[key]] = rows.length + added.length; added.push(o); return true;
     },
     flush: function () {
       var toRow = function (o) { return h.map(function (n) { return types[n] ? Db.toCell(types[n], o[n]) : ''; }); };
-      if (dirty && rows.length) sh.getRange(start, 1, rows.length, h.length).setValues(rows.map(toRow));
-      if (added.length) sh.getRange(Math.max(last, start - 1) + 1, 1, added.length, h.length).setValues(added.map(toRow));
-      var n = (dirty ? rows.length : 0) + added.length;
+      // write back only the block between the first and last changed row
+      if (dirty && hi >= lo) sh.getRange(start + lo, 1, hi - lo + 1, h.length).setValues(rows.slice(lo, hi + 1).map(toRow));
+      if (added.length) sh.getRange(last + 1, 1, added.length, h.length).setValues(added.map(toRow));
+      var n = (dirty ? hi - lo + 1 : 0) + added.length;
       Db.invalidate(table);
       return n;
-    }
+    },
+    stats: function () { return { from: start, to: end, rows: rows.length }; }
   };
 }
 
@@ -185,9 +209,7 @@ var DutyEngine = (function () {
 
   /** Every 5 minutes: picks up new punches (by row count per yearly tab) and re-checks open duties. */
   function processNew() {
-    var lock = LockService.getScriptLock();
-    if (!lock.tryLock(5000)) return { skipped: 'busy' };
-    try {
+    return withLock(function () {
       var p = props(), today = Clock.today(), staff = {}, minIso = null, cursors = {};
       yearsBetween(OSC.addDays(today, -40), today).forEach(function (y) {
         var t = punchTable(y), sh = Db.ss().getSheetByName(t);
@@ -208,14 +230,12 @@ var DutyEngine = (function () {
       Object.keys(cursors).forEach(function (y) { p.setProperty('PUNCH_DONE_' + y, String(cursors[y])); });
       p.setProperty('DUTIES_LAST_RUN', Clock.now());
       return res;
-    } finally { lock.releaseLock(); }
+    }, 5000, function () { return { skipped: 'busy' }; });
   }
   /** Full recalculation for everyone from a date (after a rule change or an import). */
   function rebuild(fromIso) {
     var ids = Db.all('Staff').map(function (s) { return s.staffId; });
-    var lock = LockService.getScriptLock();
-    if (!lock.tryLock(20000)) fail('BUSY', 'Processing is running. Try again in a minute.');
-    try { return recompute(ids, fromIso); } finally { lock.releaseLock(); }
+    return withLock(function () { return recompute(ids, fromIso); }, 20000, function () { fail('BUSY', 'Processing is running. Try again in a minute.'); });
   }
 
   /** Read duties for a date range, with names and per-person per-date split. */
@@ -225,7 +245,7 @@ var DutyEngine = (function () {
     yearsBetween(fromIso, toIso).forEach(function (y) {
       var t = dutyTable(y);
       if (!Db.ss().getSheetByName(t)) return;
-      BlockTable(t, 4000, fromIso, 'dutyDate').rows().forEach(function (d) {
+      BlockTable(t, 4000, fromIso, 'dutyDate', toIso).rows().forEach(function (d) {
         if (d.status === 'Void' || d.dutyDate < fromIso || d.dutyDate > toIso) return;
         if (filter.staffId && d.staffId !== filter.staffId) return;
         if (filter.deptCode && d.deptCode !== filter.deptCode) return;
@@ -266,7 +286,7 @@ var DutyEngine = (function () {
       .sort(function (a, b) { return a.dutyDate < b.dutyDate ? 1 : -1; }).slice(0, 500)
       .map(function (x) { var s = staff[x.staffId] || {}; x.name = s.title ? s.title + ' ' + s.fullName : x.staffId; return x; });
   }
-  return { recompute: recompute, processNew: processNew, rebuild: rebuild, list: list, preview: preview, exceptions: exceptions, buildForStaff: buildForStaff };
+  return { recompute: recompute, processNew: processNew, rebuild: rebuild, list: list, preview: preview, exceptions: exceptions, buildForStaff: buildForStaff, loadPunches: loadPunches };
 })();
 
 /* ---------- maintenance (the 5-minute trigger lives in 14_jobs.js) ---------- */

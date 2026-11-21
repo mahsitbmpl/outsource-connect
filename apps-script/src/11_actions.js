@@ -22,8 +22,8 @@ var Actions = (function () {
     if (!d) fail('NOT_FOUND', 'Duty not found. It may have changed; refresh the page.');
     return d;
   }
-  function markResolved(ids, user, text) {
-    var et = BlockTable('Exceptions', 5000);
+  function markResolved(ids, user, text, minDate) {
+    var et = BlockTable('Exceptions', 5000, minDate ? OSC.addDays(minDate, -2) : null, 'dutyDate');
     ids.forEach(function (id) { if (et.get(id)) et.put({ exceptionId: id, status: 'Resolved', resolvedBy: user.username, resolvedAt: Clock.now(), resolution: clip(text, 300), updatedAt: Clock.now() }); });
     et.flush();
   }
@@ -49,7 +49,7 @@ var Actions = (function () {
     var out = withLock(function () {
       var o = work();
       refresh(staffId, iso);
-      if (excIds && excIds.length) markResolved(excIds, user, reason);
+      if (excIds && excIds.length) markResolved(excIds, user, reason, iso);
       return o;
     });
     Audit.log(user, action, 'Duties', entityId, reason, null, after);
@@ -143,7 +143,7 @@ var Actions = (function () {
     return wrap(user, dec.staffId, dec.dutyDate, 'decision.revoke', dec.decisionKey, reason, null, [], function () {
       Db.update('DutyDecisions', dec.decisionKey, { status: 'Revoked', note: dec.note + ' · revoked: ' + reason, at: Clock.now(), by: user.username });
       // reopen what the decision had closed; the recalculation then keeps or auto-closes it
-      var et = BlockTable('Exceptions', 5000);
+      var et = BlockTable('Exceptions', 5000, OSC.addDays(dec.dutyDate, -2), 'dutyDate');
       ids.forEach(function (id) { if (et.get(id)) et.put({ exceptionId: id, status: 'Open', resolvedBy: '', resolvedAt: '', resolution: '' }); });
       et.flush();
     });

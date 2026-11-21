@@ -36,6 +36,9 @@ var Settings = {
         v = v.toLowerCase();
         if (v !== 'true' && v !== 'false') failFields({ value: 'Enter true or false' });
         break;
+      case 'str':
+        if (key === 'consoleUrl' && v && !/^https:\/\/[^\s"'<>]+$/.test(v)) failFields({ value: 'Use the full https:// address of the console' });
+        break;
       case 'weekday':
         v = v.slice(0, 1).toUpperCase() + v.slice(1, 3).toLowerCase();
         if (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(v) < 0) failFields({ value: 'Enter Mon, Tue, Wed, Thu, Fri, Sat or Sun' });

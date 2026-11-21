@@ -1,0 +1,4 @@
+Employee ID,Date,Hours,Note (optional)
+HK001,2026-12-01,12,example row: delete before use
+HK001,2026-12-02,12.5,
+SS003,2026-12-01,8,left early
