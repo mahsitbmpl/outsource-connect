@@ -1,8 +1,8 @@
 /* Console service worker: keeps the app shell available; never caches API calls. */
-const VERSION = 'osc-console-4.0.0';
+const VERSION = 'osc-console-5.0.0';
 const SHELL = [
   './', 'index.html', 'config.js', 'css/app.css', 'js/osc-core.js', 'js/api.js', 'js/ui.js', 'js/state.js', 'js/app.js',
-  'js/staff.js', 'js/companies.js', 'js/admin.js', 'js/kiosk-admin.js', 'js/duties.js', 'js/dashboard.js', 'js/exceptions.js', 'js/rules.js', 'js/rule-cases.js', 'vendor/read-excel-file-5.8.6.min.js', 'img/logo.png', 'img/mark.png',
+  'js/staff.js', 'js/companies.js', 'js/admin.js', 'js/kiosk-admin.js', 'js/duties.js', 'js/dashboard.js', 'js/exceptions.js', 'js/rules.js', 'js/rule-cases.js', 'js/billing.js', 'js/month.js', 'vendor/read-excel-file-5.8.6.min.js', 'img/logo.png', 'img/mark.png',
   'img/icon-192.png', 'fonts/inter-latin-400-normal.woff2', 'fonts/inter-latin-500-normal.woff2', 'fonts/inter-latin-600-normal.woff2',
   'fonts/inter-latin-700-normal.woff2', 'fonts/inter-latin-ext-400-normal.woff2', 'fonts/inter-latin-ext-600-normal.woff2', 'fonts/inter-latin-ext-700-normal.woff2'
 ];

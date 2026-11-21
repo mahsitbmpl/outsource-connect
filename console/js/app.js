@@ -9,6 +9,7 @@ import { tabletView, punchesView, unrecognisedView } from './kiosk-admin.js';
 import { dutiesView, rulesView, ruleTestsView } from './duties.js';
 import { dashboardView } from './dashboard.js';
 import { exceptionsView, penaltiesView } from './exceptions.js';
+import { monthView, compareView, automationView } from './month.js';
 
 const OSC = window.OSC;
 const FOOTER = 'Designed and developed by IT Department, Marengo Asia Hospital, Surat';
@@ -24,13 +25,15 @@ const NAV = [
   { href: '#/punches', icon: 'clock', label: 'Punches' },
   { href: '#/unrecognised', icon: 'scan-face', label: 'Unrecognised faces' },
   { href: '#/tablet', icon: 'tablet-smartphone', label: 'Tablet' },
-  { soon: true, icon: 'file-text', label: 'Month-end pack' }
+  { href: '#/month', icon: 'file-text', label: 'Month-end pack' },
+  { href: '#/compare', icon: 'scale', label: 'Compare & what-if' }
 ];
 const ADMIN_NAV = [
   { href: '#/rules', icon: 'scale', label: 'Attendance rules' },
   { href: '#/departments', icon: 'layers', label: 'Departments' },
   { href: '#/users', icon: 'shield-check', label: 'Users' },
   { href: '#/settings', icon: 'settings', label: 'Settings' },
+  { href: '#/automation', icon: 'zap', label: 'Automation & emails' },
   { href: '#/audit', icon: 'history', label: 'Audit log' }
 ];
 
@@ -144,7 +147,7 @@ function renderShell() {
 }
 function updateNav(hash) {
   $('#sideLinks').innerHTML = NAV.map((n) => navLink(n, hash)).join('') + (isAdmin() ? '<div class="sec">Admin</div>' + ADMIN_NAV.map((n) => navLink(n, hash)).join('') : '');
-  const tabs = [NAV[0], NAV[1], { href: '#/companies', icon: 'building-2', label: 'Companies' }, isAdmin() ? { href: '#/more', icon: 'menu', label: 'More' } : { href: '#/password', icon: 'key-round', label: 'Account' }];
+  const tabs = [NAV[0], NAV[1], { href: '#/companies', icon: 'building-2', label: 'Companies' }, { href: '#/more', icon: 'menu', label: 'More' }];
   $('#tabs').innerHTML = tabs.map((t) => { const on = hash === t.href || hash.indexOf(t.href + '/') === 0; return `<a href="${t.href}" class="${on ? 'on' : ''}">${icon(t.icon)}${esc(t.label)}</a>`; }).join('');
 }
 
@@ -180,7 +183,8 @@ async function homeView(c) {
 
 function moreView(c) {
   setTitle('More');
-  c.innerHTML = `<div class="card" style="display:grid;gap:4px">${ADMIN_NAV.concat([{ href: '#/password', icon: 'key-round', label: 'Change password' }]).map((n) => `<a class="btn ghost" style="justify-content:flex-start" href="${n.href}">${icon(n.icon)}${esc(n.label)}</a>`).join('')}</div>`;
+  const items = NAV.filter((n) => !n.soon && ['#/home', '#/staff', '#/companies'].indexOf(n.href) < 0).concat(isAdmin() ? ADMIN_NAV : []);
+  c.innerHTML = `<div class="card" style="display:grid;gap:4px">${items.concat([{ href: '#/password', icon: 'key-round', label: 'Change password' }]).map((n) => `<a class="btn ghost" style="justify-content:flex-start" href="${n.href}">${icon(n.icon)}${esc(n.label)}</a>`).join('')}</div>`;
 }
 
 // ---------- router ----------
@@ -188,6 +192,9 @@ const ROUTES = [
   [/^#\/home$/, dashboardView],
   [/^#\/exceptions$/, exceptionsView],
   [/^#\/penalties$/, penaltiesView],
+  [/^#\/month$/, monthView],
+  [/^#\/compare$/, compareView],
+  [/^#\/automation$/, automationView, true],
   [/^#\/staff$/, staffList],
   [/^#\/staff\/new$/, staffNew],
   [/^#\/staff\/import$/, staffImport],
@@ -199,7 +206,7 @@ const ROUTES = [
   [/^#\/users$/, usersView, true],
   [/^#\/settings$/, settingsView, true],
   [/^#\/audit$/, auditView, true],
-  [/^#\/more$/, moreView, true],
+  [/^#\/more$/, moreView],
   [/^#\/tablet$/, tabletView],
   [/^#\/duties$/, dutiesView],
   [/^#\/rules$/, rulesView],

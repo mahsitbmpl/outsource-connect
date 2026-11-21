@@ -8,6 +8,7 @@ function onOpen() {
     .addItem('3. Remove demo data', 'removeDemoData')
     .addItem('4. Start automatic processing (every 5 min)', 'installTriggers')
     .addItem('5. Recalculate this month\'s duties', 'recalcThisMonth')
+    .addItem('6. Send a test email', 'sendTestEmail')
     .addSeparator()
     .addItem('Reset Admin password', 'resetAdminPassword')
     .addItem('Check password speed', 'benchmarkHash')
@@ -146,4 +147,10 @@ function removeDemoData() {
   });
   Audit.log(null, 'demo.remove', 'System', '', 'Removed ' + n2 + ' staff, ' + n4 + ' companies', null, null);
   showResult_('Demo data removed', n2 + ' staff, ' + n1 + ' history rows, ' + n3 + ' rates and ' + n4 + ' companies removed.\nEmployee ID counters restart after the highest real ID.');
+}
+
+/** Menu: sends a test email to the Email TO list in Settings (also grants the email permission the first time). */
+function sendTestEmail() {
+  var r = Mailer.test({ username: 'script-editor', fullName: 'Script editor' });
+  showResult_('Test email', r.status === 'SENT' ? 'Sent to ' + r.to + '. Check the inbox (and spam folder).' : 'Not sent: ' + r.status + ' ' + r.detail);
 }

@@ -269,13 +269,7 @@ var DutyEngine = (function () {
   return { recompute: recompute, processNew: processNew, rebuild: rebuild, list: list, preview: preview, exceptions: exceptions, buildForStaff: buildForStaff };
 })();
 
-/* ---------- triggers (time-driven automation) ---------- */
-function processPunchesJob() { DutyEngine.processNew(); }
-function installTriggers() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (['processPunchesJob'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('processPunchesJob').timeBased().everyMinutes(5).create();
-  showResult_('Automatic processing on', 'New punches are turned into duties every 5 minutes.');
-}
+/* ---------- maintenance (the 5-minute trigger lives in 14_jobs.js) ---------- */
 function recalcThisMonth() {
   var from = Clock.today().slice(0, 8) + '01';
   var r = DutyEngine.rebuild(from);

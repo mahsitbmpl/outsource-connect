@@ -36,6 +36,10 @@ var Settings = {
         v = v.toLowerCase();
         if (v !== 'true' && v !== 'false') failFields({ value: 'Enter true or false' });
         break;
+      case 'weekday':
+        v = v.slice(0, 1).toUpperCase() + v.slice(1, 3).toLowerCase();
+        if (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(v) < 0) failFields({ value: 'Enter Mon, Tue, Wed, Thu, Fri, Sat or Sun' });
+        break;
       case 'time':
         if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) failFields({ value: 'Use 24-hour HH:MM, for example 09:00' });
         break;

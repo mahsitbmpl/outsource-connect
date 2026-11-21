@@ -182,3 +182,8 @@ dl.kv dd{margin:0;font-weight:500}
 .pwrules li.y{color:var(--ok)}
 
 @media print{.side,.top,.tabs,.foot,.btn,.chips,.search{display:none!important}.shell{display:block}.content{padding:0}.card{box-shadow:none;border:0}}
+
+/* Phase 5: month-end pack */
+.mco{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;background:var(--canvas)}
+.mailpv{width:100%;height:65vh;border:1px solid var(--line);border-radius:var(--r-md);background:#F3F6F5}
+.dialog:has(.mailpv),.dialog:has(.billpv){width:min(860px,100%)}

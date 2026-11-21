@@ -355,7 +355,9 @@ var Kiosk = (function () {
       fileId = p ? p.photoFileId : '';
     }
     if (!fileId) fail('NOT_FOUND', 'No photo for this record');
-    return { dataUrl: 'data:image/jpeg;base64,' + Utilities.base64Encode(DriveApp.getFileById(fileId).getBlob().getBytes()) };
+    var bytes;
+    try { bytes = DriveApp.getFileById(fileId).getBlob().getBytes(); } catch (e) { fail('NOT_FOUND', 'This photo was removed after the photo retention period (Settings: photoRetentionDays)'); }
+    return { dataUrl: 'data:image/jpeg;base64,' + Utilities.base64Encode(bytes) };
   }
   function unrecList(status) {
     return Db.all('UnrecognisedFaces').filter(function (u) { return !status || status === 'All' || u.status === status; })

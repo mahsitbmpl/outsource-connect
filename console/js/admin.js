@@ -93,11 +93,13 @@ export async function usersView(c) {
 
 // ---------- settings ----------
 const GROUPS = [
-  ['Organisation', ['orgName', 'footerText']],
+  ['Organisation', ['orgName', 'orgAddress', 'orgGstin', 'footerText']],
+  ['Bills', ['billPrefix', 'billSignatures']],
   ['Staff lists', ['titles', 'designations']],
-  ['Emails', ['emailMorningTime', 'emailEveningTime', 'emailEveningEnabled', 'emailTo', 'emailCc', 'emailBcc']],
-  ['Tablet', ['kioskLanguages', 'kioskReloadTime', 'tabletSilentAlertMinutes', 'tabletLowBatteryPct']],
-  ['Retention', ['photoRetentionDays', 'faceDeleteDaysAfterExit']],
+  ['Emails', ['emailTo', 'emailCc', 'emailBcc', 'emailAlertTo', 'emailMorningTime', 'emailEveningTime', 'emailEveningEnabled', 'emailMonthlyEnabled', 'consoleUrl']],
+  ['Tablet', ['kioskLanguages', 'kioskReloadTime', 'tabletAlertsEnabled', 'tabletSilentAlertMinutes', 'tabletLowBatteryPct', 'tabletQueueAlert']],
+  ['Automation', ['nightlyCloseTime', 'backupDay', 'backupTime', 'backupKeep', 'draftPackTime']],
+  ['Retention', ['photoRetentionDays', 'faceDeleteDaysAfterExit', 'dataKeepYears']],
   ['Security', ['sessionHours', 'sessionIdleMinutes', 'lockoutAttempts', 'lockoutMinutes', 'passwordMinLength']]
 ];
 export async function settingsView(c) {
@@ -113,12 +115,13 @@ export async function settingsView(c) {
   let html = GROUPS.map((g) => card(g[0], g[1])).join('');
   const rest = list.filter((s) => !GROUPS.some((g) => g[1].indexOf(s.key) >= 0)).map((s) => s.key);
   if (rest.length) html += card('Other', rest);
-  c.innerHTML = `<div class="note">${icon('settings')}<span>Every change asks for a reason and is kept in the audit log. Attendance rules (grace, rounding, boundaries) get their own versioned page in Phase 3.</span></div>` + html;
+  c.innerHTML = `<div class="note">${icon('settings')}<span>Every change asks for a reason and is kept in the audit log. Attendance rules (grace, rounding, boundaries) are on their own versioned page. Emails and automatic jobs can be checked on Automation & emails.</span></div>` + html;
   $$('[data-key]', c).forEach((b) => {
     b.onclick = async () => {
       const s = by[b.dataset.key];
       const input = s.type === 'bool' ? field('value', 'New value', { type: 'select', options: ['true', 'false'], value: s.value })
         : s.type === 'time' ? field('value', 'New value (24-hour)', { type: 'time', value: s.value, required: true })
+        : s.type === 'weekday' ? field('value', 'New value', { type: 'select', options: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], value: s.value })
         : s.type === 'int' ? field('value', 'New value', { type: 'number', value: s.value, required: true, attrs: 'min="0" step="1"' })
         : field('value', 'New value', { type: s.type === 'list' ? 'textarea' : 'text', value: s.value, hint: s.type === 'list' ? 'Separate items with commas' : '', wide: true });
       const r = await dialog({
