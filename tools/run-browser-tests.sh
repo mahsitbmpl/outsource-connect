@@ -11,4 +11,5 @@ run "--demo" e2e_kiosk.py
 run "--demo --punches" e2e_duties.py
 run "--demo --punches" e2e_phase4.py
 run "--demo --month" e2e_phase5.py
+run "--demo --month" e2e_phase6.py
 pkill -f tools/dev-server.js; echo "ALL BROWSER TESTS OK"

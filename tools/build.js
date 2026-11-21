@@ -34,3 +34,12 @@ const kfiles = walk(kdir).filter((f) => f !== 'sw.js' && !/\.(LICENSE|txt)$/.tes
 const swPath = path.join(kdir, 'sw.js');
 fs.writeFileSync(swPath, fs.readFileSync(swPath, 'utf8').replace(/const FILES = \[[\s\S]*?\];/, 'const FILES = [\n' + kfiles.map((f) => "  '" + f + "'").join(',\n') + '\n];'));
 console.log('Kiosk offline cache: ' + kfiles.length + ' files');
+
+// Parallel-run template (Employee ID, Date, Hours), written with the same Excel writer the server uses
+const X = require(path.join(root, 'shared/xlsx.js'));
+const wb = X.workbook(); wb.title = 'Parallel run register';
+const ws = wb.sheet('Register', { widths: { A: 16, B: 14, C: 10, D: 40 }, freeze: 'A2' });
+ws.row('A1', ['Employee ID', 'Date', 'Hours', 'Note (optional)'], { b: true, fill: 'E2F2F0', border: true });
+[['HK001', '2026-12-01', 12, 'example row: delete before use'], ['HK001', '2026-12-02', 12.5, ''], ['SS003', '2026-12-01', 8, 'left early']].forEach((r, i) => ws.row('A' + (i + 2), r, [{ border: true }, { border: true }, { border: true, fmt: '0.00' }, { border: true }]));
+fs.writeFileSync(path.join(root, 'console/templates/parallel_run_template.xlsx'), Buffer.from(wb.build()));
+fs.writeFileSync(path.join(root, 'console/templates/parallel_run_template.csv'), 'Employee ID,Date,Hours,Note (optional)\r\nHK001,2026-12-01,12,example row: delete before use\r\nHK001,2026-12-02,12.5,\r\nSS003,2026-12-01,8,left early\r\n');

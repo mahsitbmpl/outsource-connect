@@ -14,6 +14,7 @@ const toBuf = (v) => (Array.isArray(v) ? Buffer.from(v.map((b) => b & 0xff)) : B
 class Range {
   constructor(sheet, r, c, nr, nc) { Object.assign(this, { sheet, r, c, nr, nc }); }
   getValues() {
+    STATS.reads++; STATS.readCells += this.nr * this.nc;
     const out = [];
     for (let i = 0; i < this.nr; i++) {
       const row = this.sheet.rows[this.r - 1 + i] || [];
@@ -30,22 +31,28 @@ class Range {
       while (this.sheet.rows.length <= ri) this.sheet.rows.push([]);
       row.forEach((v, j) => { this.sheet.rows[ri][this.c - 1 + j] = v; });
     });
-    this.sheet.writes++;
+    this.sheet.writes++; STATS.writes++; STATS.writeCells += this.nr * this.nc;
     return this;
   }
+  clearContent() { for (let i = 0; i < this.nr; i++) { const row = this.sheet.rows[this.r - 1 + i]; if (row) for (let j = 0; j < this.nc; j++) row[this.c - 1 + j] = ''; } return this; }
 }
+const STATS = { reads: 0, readCells: 0, writes: 0, writeCells: 0 };
 ['setFontWeight', 'setBackground', 'setNumberFormat', 'setWrap', 'setHorizontalAlignment'].forEach((m) => { Range.prototype[m] = function () { return this; }; });
 
 class Sheet {
-  constructor(name) { this.name = name; this.rows = []; this.writes = 0; }
+  constructor(name) { this.name = name; this.rows = []; this.writes = 0; this.maxCols = 26; }
+  getMaxColumns() { return Math.max(this.maxCols, this.getLastColumn()); }
+  deleteColumns(c, n) { this.maxCols = Math.max(this.getLastColumn(), c - 1); return this; }
+  deleteRows(r, n) { this.rows.splice(r - 1, n); return this; }
+  insertRowsAfter() { return this; }
   getName() { return this.name; }
   getLastRow() { for (let i = this.rows.length - 1; i >= 0; i--) if ((this.rows[i] || []).some((v) => v !== '' && v !== undefined && v !== null)) return i + 1; return 0; }
   getLastColumn() { return this.rows.reduce((m, r) => { let n = 0; (r || []).forEach((v, j) => { if (v !== '' && v !== undefined) n = j + 1; }); return Math.max(m, n); }, 0); }
   getMaxRows() { return Math.max(1000, this.rows.length); }
   setName(n) { this.name = n; return this; }
-  copyTo(book) { const c = new Sheet(this.name + ' copy'); c.rows = this.rows.map((r) => (r || []).slice()); book.sheets.push(c); return c; }
+  copyTo(book) { const c = new Sheet('Copy of ' + this.name); c.rows = this.rows.map((r) => (r || []).slice()); c.maxCols = this.maxCols; book.sheets.push(c); return c; }
   getRange(r, c, nr, nc) { if (r < 1 || c < 1 || (nr || 1) < 1 || (nc || 1) < 1) throw new Error('getRange: bad args ' + [r, c, nr, nc]); return new Range(this, r, c, nr || 1, nc || 1); }
-  appendRow(arr) { this.rows.splice(this.getLastRow(), 0, arr.slice()); this.writes++; return this; }
+  appendRow(arr) { this.rows.splice(this.getLastRow(), 0, arr.slice()); this.writes++; STATS.writes++; STATS.writeCells += arr.length; return this; }
   deleteRow(r) { this.rows.splice(r - 1, 1); return this; }
   setFrozenRows() { return this; }
 }
@@ -59,7 +66,8 @@ function makeEnv(opts) {
     insertSheet(n) { const s = new Sheet(n); this.sheets.push(s); return s; },
     getSheets() { return this.sheets.slice(); },
     deleteSheet(s) { this.sheets = this.sheets.filter((x) => x !== s); },
-    setSpreadsheetTimeZone() {}
+    setSpreadsheetTimeZone() {},
+    getSpreadsheetTimeZone() { return 'Asia/Kolkata'; }
   };
   const alerts = [];
   const cacheStore = new Map();
@@ -76,13 +84,15 @@ function makeEnv(opts) {
     const f = { id, name: blob && blob.getName ? blob.getName() : String((blob && blob.name) || id), blob, trashed: false, parent,
       getId: () => id, getName: () => f.name, getUrl: () => 'https://drive.google.com/file/d/' + id, getBlob: () => f.blob, setTrashed: (v) => { f.trashed = !!v; },
       makeCopy: (name, folder) => { const c = makeFile(Object.assign({}, f.blob, { getName: () => name, name }), folder); c.name = name; if (folder) folder.fileIds.push(c.id); return c; },
-      moveTo: (folder) => { f.parent = folder; folder.fileIds.push(id); return f; } };
+      moveTo: (folder) => { f.parent = folder; folder.fileIds.push(id); return f; },
+      sharing: 'PRIVATE', getSharingAccess: () => f.sharing, getSharingPermission: () => 'EDIT', getEditors: () => [{ getEmail: () => 'owner@example.com' }], getViewers: () => [] };
     fileObjs.set(id, f); if (blob && !fixedId) files.set(id, blob);
     return f;
   };
   const makeFolder = (name, parent) => {
     const id = 'F' + (++folderSeq);
     const f = { name, parent, files: [], fileIds: [], children: [], trashed: false, getId: () => id, getName: () => f.name, setTrashed: (v) => { f.trashed = !!v; },
+      sharing: 'PRIVATE', getSharingAccess: () => f.sharing, getSharingPermission: () => 'NONE', getEditors: () => [], getViewers: () => [],
       createFolder: (n) => { const c = makeFolder(n, f); f.children.push(c); return c; },
       getFolders: () => iter(f.children.filter((c) => !c.trashed)),
       getFoldersByName: (n) => iter(f.children.filter((c) => !c.trashed && c.name === n)),
@@ -99,10 +109,11 @@ function makeEnv(opts) {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => book,
       openById: (id) => (id && books.has(id) ? books.get(id) : book),
-      create: (name) => { const id = 'BOOK' + (books.size + 1); const b = { name, sheets: [], getId: () => id, getSheetByName(n) { return this.sheets.find((x) => x.name === n) || null; }, deleteSheet(x) { this.sheets = this.sheets.filter((y) => y !== x); }, getSheets() { return this.sheets.slice(); } }; books.set(id, b); return b; },
+      create: (name) => { const id = 'BOOK' + (books.size + 1); const b = { name, sheets: [], insertSheet(n) { const x = new Sheet(n); this.sheets.push(x); return x; }, getId: () => id, getSheetByName(n) { return this.sheets.find((x) => x.name === n) || null; }, deleteSheet(x) { this.sheets = this.sheets.filter((y) => y !== x); }, getSheets() { return this.sheets.slice(); } }; books.set(id, b); return b; },
       getUi: () => ({
         alert: (title, text) => { alerts.push({ title, text }); },
-        ButtonSet: { OK: 'OK' },
+        ButtonSet: { OK: 'OK', OK_CANCEL: 'OK_CANCEL' }, Button: { OK: 'OK', CANCEL: 'CANCEL' },
+        prompt: (title, text) => { const a = (opts.promptAnswers || []).shift(); return { getSelectedButton: () => (a == null ? 'CANCEL' : 'OK'), getResponseText: () => String(a || '') }; },
         createMenu: () => { const m = { addItem: () => m, addSeparator: () => m, addToUi: () => m }; return m; }
       })
     },
@@ -116,7 +127,7 @@ function makeEnv(opts) {
     ScriptApp: (() => { const trig = []; return { triggers: trig, getProjectTriggers: () => trig.slice(), deleteTrigger: (t) => { trig.splice(trig.indexOf(t), 1); },
       newTrigger: (fn) => { const b = { timeBased: () => b, everyMinutes: (m) => { b.m = m; return b; }, everyDays: () => b, atHour: () => b, create: () => { const t = { getHandlerFunction: () => fn, m: b.m }; trig.push(t); return t; } }; return b; } }; })(),
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => props.set(k, String(v)), deleteProperty: (k) => props.delete(k) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => props.set(k, String(v)), deleteProperty: (k) => props.delete(k), getKeys: () => [...props.keys()], getProperties: () => Object.fromEntries(props) }) },
     DriveApp: { createFolder: (n) => makeFolder(n), getFolderById: (id) => { if (!folders.has(id)) throw new Error('no folder'); return folders.get(id); },
       getFileById: (id) => { if (!fileObjs.has(id)) throw new Error('no file'); return fileObjs.get(id); } },
     MailApp: { sendEmail: (o) => { if (opts.mailFails) throw new Error('Service invoked too many times'); mails.push(o); mailQuota -= 1; }, getRemainingDailyQuota: () => mailQuota },
@@ -143,7 +154,8 @@ function makeEnv(opts) {
   vm.runInContext('Clock.nowMs = function () { return __now(); };', Object.assign(ctx, { __now: () => now }));
 
   const env = {
-    ctx, book, alerts, cacheStore, props, files, folders, fileObjs, mails, books,
+    ctx, book, alerts, cacheStore, props, files, folders, fileObjs, mails, books, stats: STATS,
+    resetStats: () => { STATS.reads = 0; STATS.readCells = 0; STATS.writes = 0; STATS.writeCells = 0; },
     setMailQuota: (n) => { mailQuota = n; },
     setNow: (iso) => { now = Date.parse(iso); },
     advanceMinutes: (m) => { now += m * 60000; },
