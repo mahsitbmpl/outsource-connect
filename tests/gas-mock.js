@@ -42,6 +42,8 @@ class Sheet {
   getLastRow() { for (let i = this.rows.length - 1; i >= 0; i--) if ((this.rows[i] || []).some((v) => v !== '' && v !== undefined && v !== null)) return i + 1; return 0; }
   getLastColumn() { return this.rows.reduce((m, r) => { let n = 0; (r || []).forEach((v, j) => { if (v !== '' && v !== undefined) n = j + 1; }); return Math.max(m, n); }, 0); }
   getMaxRows() { return Math.max(1000, this.rows.length); }
+  setName(n) { this.name = n; return this; }
+  copyTo(book) { const c = new Sheet(this.name + ' copy'); c.rows = this.rows.map((r) => (r || []).slice()); book.sheets.push(c); return c; }
   getRange(r, c, nr, nc) { if (r < 1 || c < 1 || (nr || 1) < 1 || (nc || 1) < 1) throw new Error('getRange: bad args ' + [r, c, nr, nc]); return new Range(this, r, c, nr || 1, nc || 1); }
   appendRow(arr) { this.rows.splice(this.getLastRow(), 0, arr.slice()); this.writes++; return this; }
   deleteRow(r) { this.rows.splice(r - 1, 1); return this; }
@@ -64,19 +66,40 @@ function makeEnv(opts) {
   const props = new Map();
   const folders = new Map();
   let folderSeq = 0;
-  const files = new Map();
-  const makeFolder = (name) => {
+  const files = new Map();      // id -> blob (kept for older tests)
+  const fileObjs = new Map();   // id -> file object
+  const mails = [];
+  let mailQuota = 100;
+  const iter = (arr) => { let i = 0; return { hasNext: () => i < arr.length, next: () => arr[i++] }; };
+  const makeFile = (blob, parent, fixedId) => {
+    const id = fixedId || 'FILE' + (fileObjs.size + 1);
+    const f = { id, name: blob && blob.getName ? blob.getName() : String((blob && blob.name) || id), blob, trashed: false, parent,
+      getId: () => id, getName: () => f.name, getUrl: () => 'https://drive.google.com/file/d/' + id, getBlob: () => f.blob, setTrashed: (v) => { f.trashed = !!v; },
+      makeCopy: (name, folder) => { const c = makeFile(Object.assign({}, f.blob, { getName: () => name, name }), folder); c.name = name; if (folder) folder.fileIds.push(c.id); return c; },
+      moveTo: (folder) => { f.parent = folder; folder.fileIds.push(id); return f; } };
+    fileObjs.set(id, f); if (blob && !fixedId) files.set(id, blob);
+    return f;
+  };
+  const makeFolder = (name, parent) => {
     const id = 'F' + (++folderSeq);
-    const f = { name, files: [], getId: () => id, createFolder: (n) => makeFolder(n),
-      createFile: (blob) => { const fid = 'FILE' + (files.size + 1); files.set(fid, blob); f.files.push(fid); return { getId: () => fid }; } };
+    const f = { name, parent, files: [], fileIds: [], children: [], trashed: false, getId: () => id, getName: () => f.name, setTrashed: (v) => { f.trashed = !!v; },
+      createFolder: (n) => { const c = makeFolder(n, f); f.children.push(c); return c; },
+      getFolders: () => iter(f.children.filter((c) => !c.trashed)),
+      getFoldersByName: (n) => iter(f.children.filter((c) => !c.trashed && c.name === n)),
+      getFiles: () => iter(f.fileIds.map((x) => fileObjs.get(x)).filter((x) => x && !x.trashed)),
+      getFilesByName: (n) => iter(f.fileIds.map((x) => fileObjs.get(x)).filter((x) => x && !x.trashed && x.name === n)),
+      createFile: (blob) => { const fo = makeFile(blob, f); f.files.push(fo.id); f.fileIds.push(fo.id); return fo; } };
     folders.set(id, f); return f;
   };
+  makeFile({ getName: () => 'OutSource Connect', getBytes: () => [] }, null, 'TEST_SHEET_ID');
+  const books = new Map();
 
   const sandbox = {
     console: opts.quiet === false ? console : { log() {}, error() {}, warn() {} },
     SpreadsheetApp: {
       getActiveSpreadsheet: () => book,
-      openById: () => book,
+      openById: (id) => (id && books.has(id) ? books.get(id) : book),
+      create: (name) => { const id = 'BOOK' + (books.size + 1); const b = { name, sheets: [], getId: () => id, getSheetByName(n) { return this.sheets.find((x) => x.name === n) || null; }, deleteSheet(x) { this.sheets = this.sheets.filter((y) => y !== x); }, getSheets() { return this.sheets.slice(); } }; books.set(id, b); return b; },
       getUi: () => ({
         alert: (title, text) => { alerts.push({ title, text }); },
         ButtonSet: { OK: 'OK' },
@@ -95,7 +118,8 @@ function makeEnv(opts) {
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => props.set(k, String(v)), deleteProperty: (k) => props.delete(k) }) },
     DriveApp: { createFolder: (n) => makeFolder(n), getFolderById: (id) => { if (!folders.has(id)) throw new Error('no folder'); return folders.get(id); },
-      getFileById: (id) => { if (!files.has(id)) throw new Error('no file'); const b = files.get(id); return { getBlob: () => b }; } },
+      getFileById: (id) => { if (!fileObjs.has(id)) throw new Error('no file'); return fileObjs.get(id); } },
+    MailApp: { sendEmail: (o) => { if (opts.mailFails) throw new Error('Service invoked too many times'); mails.push(o); mailQuota -= 1; }, getRemainingDailyQuota: () => mailQuota },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (s) => ({ content: s, setMimeType() { return this; } }) },
     Utilities: {
       getUuid: () => crypto.randomUUID(),
@@ -105,7 +129,7 @@ function makeEnv(opts) {
       computeHmacSha256Signature: (value, key) => toSigned(crypto.createHmac('sha256', toBuf(key)).update(toBuf(value)).digest()),
       base64EncodeWebSafe: (bytes) => toBuf(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
       base64DecodeWebSafe: (s) => toSigned(Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
-      newBlob: (s, mime, name) => ({ mime, name, getBytes: () => (Array.isArray(s) ? s.slice() : toSigned(Buffer.from(String(s), 'utf8'))) }),
+      newBlob: (s, mime, name) => { const b = { mime, name, getName: () => b.name, setName: (n) => { b.name = n; return b; }, getContentType: () => mime, getBytes: () => (Array.isArray(s) ? s.slice() : toSigned(Buffer.from(String(s), 'utf8'))) }; return b; },
       base64Decode: (s) => toSigned(Buffer.from(s, 'base64')),
       base64Encode: (bytes) => toBuf(bytes).toString('base64')
     },
@@ -119,7 +143,8 @@ function makeEnv(opts) {
   vm.runInContext('Clock.nowMs = function () { return __now(); };', Object.assign(ctx, { __now: () => now }));
 
   const env = {
-    ctx, book, alerts, cacheStore, props, files, folders,
+    ctx, book, alerts, cacheStore, props, files, folders, fileObjs, mails, books,
+    setMailQuota: (n) => { mailQuota = n; },
     setNow: (iso) => { now = Date.parse(iso); },
     advanceMinutes: (m) => { now += m * 60000; },
     /** Call the HTTP API exactly like the console does. */

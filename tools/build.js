@@ -10,7 +10,8 @@ const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 const strip = (t) => t.replace(/\nif \(typeof module[^\n]*\n?$/, '\n');
-const core = strip(read('shared/osc-core.js')) + '\n/* ----- shared/rules.js ----- */\n' + strip(read('shared/rules.js'));
+const SHARED = ['rules.js', 'xlsx.js', 'pdf.js', 'billing.js', 'pack.js'];
+const core = strip(read('shared/osc-core.js')) + SHARED.map((f) => '\n/* ----- shared/' + f + ' ----- */\n' + strip(read('shared/' + f))).join('');
 const srcDir = path.join(root, 'apps-script/src');
 const parts = fs.readdirSync(srcDir).filter((f) => f.endsWith('.js')).sort()
   .map((f) => `\n/* ----- ${f} ----- */\n` + fs.readFileSync(path.join(srcDir, f), 'utf8'));
@@ -21,7 +22,7 @@ fs.writeFileSync(path.join(root, 'apps-script/dist/Code.gs'), header + '\n/* ---
 fs.copyFileSync(path.join(root, 'apps-script/appsscript.json'), path.join(root, 'apps-script/dist/appsscript.json'));
 fs.copyFileSync(path.join(root, 'shared/osc-core.js'), path.join(root, 'console/js/osc-core.js'));
 fs.copyFileSync(path.join(root, 'shared/osc-core.js'), path.join(root, 'kiosk/js/osc-core.js'));
-['rules.js', 'rule-cases.js'].forEach((f) => fs.copyFileSync(path.join(root, 'shared', f), path.join(root, 'console/js', f)));
+['rules.js', 'rule-cases.js', 'xlsx.js', 'pdf.js', 'billing.js', 'pack.js'].forEach((f) => fs.copyFileSync(path.join(root, 'shared', f), path.join(root, 'console/js', f)));
 fs.copyFileSync(path.join(root, 'shared/rules.js'), path.join(root, 'kiosk/js/rules.js'));
 const lines = fs.readFileSync(path.join(root, 'apps-script/dist/Code.gs'), 'utf8').split('\n').length;
 console.log('Built apps-script/dist/Code.gs (' + lines + ' lines) and console/js/osc-core.js');
