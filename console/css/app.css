@@ -187,3 +187,9 @@ dl.kv dd{margin:0;font-weight:500}
 .mco{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;background:var(--canvas)}
 .mailpv{width:100%;height:65vh;border:1px solid var(--line);border-radius:var(--r-md);background:#F3F6F5}
 .dialog:has(.mailpv),.dialog:has(.billpv){width:min(860px,100%)}
+
+/* v6.1: selection bars, filters */
+.selbar{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;position:sticky;top:64px;z-index:4}
+.xsel,.usel{width:18px;height:18px;accent-color:var(--primary);flex:0 0 auto}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.diag{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}

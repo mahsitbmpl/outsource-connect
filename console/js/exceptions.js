@@ -40,41 +40,82 @@ export const dutyActions = {
 };
 
 // ---------- exceptions page ----------
-let filter = 'ALL';
+let filter = 'ALL', view = 'Open';
+const selected = new Set();
+const IGNORE_NOTE = 'The item leaves the list without changing any hours. A missing IN/OUT then counts 0 hours for that duty, and hours over 12 are not billed. It stays in the records and can be restored from "Ignored".';
 export async function exceptionsView(c) {
   setTitle('Exceptions');
   c.innerHTML = skeleton(8);
-  const [exc, unrec, dutiesRes] = await Promise.all([apiFast('exceptions.list', { status: 'Open' }), apiFast('unrecognised.list', { status: 'Open' }),
-    apiFast('duties.list', { from: OSC.addDays(today(), -45), to: today() })]);
+  const [exc, unrec] = await Promise.all([apiFast('exceptions.list', { status: view }), apiFast('unrecognised.list', { status: 'Open' })]);
+  // duty details only for the dates that have items (not 45 days of duties)
+  const oldest = exc.reduce((m, x) => (!m || x.dutyDate < m ? x.dutyDate : m), '') || today();
+  const dutiesRes = exc.length ? await apiFast('duties.list', { from: oldest < OSC.addDays(today(), -60) ? OSC.addDays(today(), -60) : oldest, to: today() }) : { duties: [] };
   const dutyById = {}; dutiesRes.duties.forEach((d) => { dutyById[d.dutyId] = d; });
   const counts = {}; exc.forEach((x) => { counts[x.type] = (counts[x.type] || 0) + 1; });
-  setTitle('Exceptions', (exc.length + unrec.length) + ' to resolve');
+  const ignoredView = view === 'Ignored';
+  setTitle('Exceptions', ignoredView ? exc.length + ' ignored' : (exc.length + unrec.length) + ' to resolve');
   const list = exc.filter((x) => filter === 'ALL' || x.type === filter);
-  c.innerHTML = `<div class="chips"><button class="chip${filter === 'ALL' ? ' on' : ''}" data-f="ALL">All <span class="ct">${exc.length + unrec.length}</span></button>
+  [...selected].forEach((id) => { if (!list.some((x) => x.exceptionId === id)) selected.delete(id); });
+  c.innerHTML = `<div class="chips"><button class="chip${filter === 'ALL' ? ' on' : ''}" data-f="ALL">All <span class="ct">${exc.length + (ignoredView ? 0 : unrec.length)}</span></button>
       ${Object.keys(TYPE).map((k) => `<button class="chip${filter === k ? ' on' : ''}" data-f="${k}">${esc(TYPE[k][0])} <span class="ct">${counts[k] || 0}</span></button>`).join('')}
-      <button class="chip${filter === 'UNREC' ? ' on' : ''}" data-f="UNREC">Unrecognised faces <span class="ct">${unrec.length}</span></button><span class="sp"></span>
+      ${ignoredView ? '' : `<button class="chip${filter === 'UNREC' ? ' on' : ''}" data-f="UNREC">Unrecognised faces <span class="ct">${unrec.length}</span></button>`}<span class="sp"></span>
+      <select class="chip" id="xView" aria-label="Show"><option value="Open"${ignoredView ? '' : ' selected'}>To resolve</option><option value="Ignored"${ignoredView ? ' selected' : ''}>Ignored</option></select>
       <a class="btn ghost" href="#/penalties">${icon('indian-rupee')}Penalties & deductions</a></div>
+    ${list.length && filter !== 'UNREC' ? `<div class="row selbar" id="selBar"><label class="nw" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="selAll"> Select all shown</label>
+      <span id="selN" style="color:var(--muted)">${selected.size} selected</span><span class="sp"></span>
+      ${ignoredView ? `<button class="btn ghost sm" id="bulkRestore" disabled>${icon('history')}Restore selected</button>` : `<button class="btn ghost sm" id="bulkIgnore" disabled>${icon('ban')}Ignore selected</button>`}</div>` : ''}
     <div id="xl" style="display:grid;gap:12px"></div>`;
   const xl = $('#xl');
-  if (filter === 'UNREC' || filter === 'ALL') xl.insertAdjacentHTML('beforeend', unrec.map((u) => `<div class="card" style="border-left:4px solid var(--out)"><div class="row"><span class="pill out">${icon('scan-face')}Unrecognised face</span><b class="tnum">${esc(OSC.fmtDateTime(u.at))}</b><span class="sp"></span><span style="color:var(--muted)">closest match ${esc(u.bestStaffId || '—')}</span></div>
-      <div class="row" style="margin-top:10px"><button class="btn primary sm" data-assign="${esc(u.unrecId)}">Assign to a person</button><button class="btn ghost sm" data-photo="${esc(u.unrecId)}">View photo</button></div></div>`).join(''));
+  if (!ignoredView && (filter === 'UNREC' || filter === 'ALL')) xl.insertAdjacentHTML('beforeend', unrec.map((u) => `<div class="card" style="border-left:4px solid var(--out)"><div class="row"><span class="pill out">${icon('scan-face')}Unrecognised face</span><b class="tnum">${esc(OSC.fmtDateTime(u.at))}</b><span class="sp"></span><span style="color:var(--muted)">closest match ${esc(u.bestStaffId || '—')}</span></div>
+      <div class="row" style="margin-top:10px"><button class="btn primary sm" data-assign="${esc(u.unrecId)}">Assign to a person</button><button class="btn ghost sm" data-photo="${esc(u.unrecId)}">View photo</button><a class="btn link sm" href="#/unrecognised">Dismiss on the Unrecognised faces page</a></div></div>`).join(''));
   if (filter !== 'UNREC') xl.insertAdjacentHTML('beforeend', list.map((x) => {
-    const d = dutyById[x.dutyId] || {}, sug = x.suggestion || {};
+    const d = dutyById[x.dutyId] || {}, sug = x.suggestion || {}, id = esc(x.exceptionId);
     let buttons = '';
-    if (x.type === 'MISSING_OUT') buttons = `<button class="btn primary sm" data-a="setOut" data-x="${esc(x.exceptionId)}">Set OUT ${esc(OSC.fmtDateTime(sug.outAt).slice(12))}</button><button class="btn ghost sm" data-a="setOut" data-x="${esc(x.exceptionId)}">Another time</button>`;
-    if (x.type === 'MISSING_IN') buttons = `<button class="btn primary sm" data-a="addIn" data-x="${esc(x.exceptionId)}">Add IN ${esc(OSC.fmtDateTime(sug.inAt).slice(12))}</button><button class="btn ghost sm" data-a="addIn" data-x="${esc(x.exceptionId)}">Another time</button>`;
-    if (x.type === 'LATE_GRACE') buttons = `<button class="btn ghost sm" data-a="strict" data-x="${esc(x.exceptionId)}">Keep strict · ${h2(sug.strict)} h</button><button class="btn primary sm" data-a="grace" data-x="${esc(x.exceptionId)}">Give grace · ${h2(sug.grace)} h</button><button class="btn ghost sm" data-a="override" data-x="${esc(x.exceptionId)}">Override…</button>`;
-    if (x.type === 'LONG_DUTY') buttons = `<button class="btn primary sm" data-a="approveAll" data-x="${esc(x.exceptionId)}">Approve ${h2(sug.total)} h</button><button class="btn ghost sm" data-a="approve12" data-x="${esc(x.exceptionId)}">Approve 12 h only</button>${d.status === 'Closed' && d.systemHours > 24 ? `<button class="btn ghost sm" data-a="split" data-x="${esc(x.exceptionId)}">Split duty</button>` : ''}`;
-    if (x.type === 'SHORT_DUTY') buttons = `<button class="btn primary sm" data-a="review" data-x="${esc(x.exceptionId)}">Mark reviewed</button><button class="btn ghost sm" data-a="override" data-x="${esc(x.exceptionId)}">Override hours…</button>`;
-    const stripe = { bad: 'var(--bad)', warn: 'var(--warn-fill)', neu: 'var(--line-2)' }[TYPE[x.type][1]];
-    return `<div class="card" style="border-left:4px solid ${stripe}"><div class="row"><span class="pill ${TYPE[x.type][1]}">${esc(TYPE[x.type][0])}</span><div class="who"><b>${esc(x.name)}</b><span>${esc(x.staffId)}</span></div><span class="sp"></span><span class="tnum" style="color:var(--muted)">Duty date ${esc(OSC.fmtDate(x.dutyDate))}</span></div>
+    if (ignoredView) buttons = `<button class="btn ghost sm" data-restore="${id}">${icon('history')}Restore</button>`;
+    else {
+      if (x.type === 'MISSING_OUT') buttons = `<button class="btn primary sm" data-a="setOut" data-x="${id}">Set OUT ${esc(OSC.fmtDateTime(sug.outAt).slice(12))}</button><button class="btn ghost sm" data-a="setOut" data-x="${id}">Another time</button>`;
+      if (x.type === 'MISSING_IN') buttons = `<button class="btn primary sm" data-a="addIn" data-x="${id}">Add IN ${esc(OSC.fmtDateTime(sug.inAt).slice(12))}</button><button class="btn ghost sm" data-a="addIn" data-x="${id}">Another time</button>`;
+      if (x.type === 'LATE_GRACE') buttons = `<button class="btn ghost sm" data-a="strict" data-x="${id}">Keep strict · ${h2(sug.strict)} h</button><button class="btn primary sm" data-a="grace" data-x="${id}">Give grace · ${h2(sug.grace)} h</button><button class="btn ghost sm" data-a="override" data-x="${id}">Override…</button>`;
+      if (x.type === 'LONG_DUTY') buttons = `<button class="btn primary sm" data-a="approveAll" data-x="${id}">Approve ${h2(sug.total)} h</button><button class="btn ghost sm" data-a="approve12" data-x="${id}">Approve 12 h only</button>${d.status === 'Closed' && d.systemHours > 24 ? `<button class="btn ghost sm" data-a="split" data-x="${id}">Split duty</button>` : ''}`;
+      if (x.type === 'SHORT_DUTY') buttons = `<button class="btn primary sm" data-a="review" data-x="${id}">Mark reviewed</button><button class="btn ghost sm" data-a="override" data-x="${id}">Override hours…</button>`;
+      buttons += `<span class="sp"></span><button class="btn link sm" data-ignore="${id}" title="Remove from the list without changing hours">${icon('ban')}Ignore</button>`;
+    }
+    const stripe = ignoredView ? 'var(--line-2)' : { bad: 'var(--bad)', warn: 'var(--warn-fill)', neu: 'var(--line-2)' }[TYPE[x.type][1]];
+    return `<div class="card xc" style="border-left:4px solid ${stripe}"><div class="row"><input type="checkbox" class="xsel" data-sel="${id}"${selected.has(x.exceptionId) ? ' checked' : ''} aria-label="Select">
+      <span class="pill ${ignoredView ? 'neu' : TYPE[x.type][1]}">${esc(TYPE[x.type][0])}</span><div class="who"><b>${esc(x.name)}</b><span>${esc(x.staffId)}</span></div><span class="sp"></span><span class="tnum" style="color:var(--muted)">Duty date ${esc(OSC.fmtDate(x.dutyDate))}</span></div>
       <div style="margin:10px 0">${esc(x.summary)}</div>${d.inAt || d.outAt ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">IN ${esc(OSC.fmtDateTime(d.inAt) || '—')} · OUT ${esc(OSC.fmtDateTime(d.outAt) || '—')} · ${esc(d.explain || '')}</div>` : ''}
+      ${ignoredView ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(x.resolution || '')} · ${esc(x.resolvedBy || '')} · ${esc(OSC.fmtDateTime(x.resolvedAt) || '')}</div>` : ''}
       <div class="row">${buttons}</div></div>`;
   }).join(''));
-  if (!xl.innerHTML.trim()) xl.innerHTML = `<div class="card">${emptyState('circle-check', 'Nothing to resolve.')}</div>`;
+  if (!xl.innerHTML.trim()) xl.innerHTML = `<div class="card">${emptyState('circle-check', ignoredView ? 'No ignored items.' : 'Nothing to resolve.')}</div>`;
   $$('[data-f]', c).forEach((b) => { b.onclick = () => { filter = b.dataset.f; exceptionsView(c); }; });
+  $('#xView').onchange = (e) => { view = e.target.value; filter = 'ALL'; selected.clear(); exceptionsView(c); };
   const byId = {}; exc.forEach((x) => { byId[x.exceptionId] = x; });
-  const after = (r) => { if (r) exceptionsView(c); };
+  const after = (r) => { if (r) { selected.clear(); exceptionsView(c); } };
+  // selection
+  const syncSel = () => {
+    const n = selected.size, el = $('#selN'); if (el) el.textContent = n + ' selected';
+    ['#bulkIgnore', '#bulkRestore'].forEach((q) => { const b = $(q); if (b) { b.disabled = !n; b.lastChild.textContent = (q === '#bulkIgnore' ? 'Ignore' : 'Restore') + (n ? ' ' + n + ' selected' : ' selected'); } });
+    const all = $('#selAll'); if (all) all.checked = !!list.length && list.every((x) => selected.has(x.exceptionId));
+  };
+  $$('.xsel', c).forEach((cb) => { cb.onchange = () => { if (cb.checked) selected.add(cb.dataset.sel); else selected.delete(cb.dataset.sel); syncSel(); }; });
+  const allBox = $('#selAll');
+  if (allBox) allBox.onchange = () => { list.forEach((x) => { if (allBox.checked) selected.add(x.exceptionId); else selected.delete(x.exceptionId); }); $$('.xsel', c).forEach((cb) => { cb.checked = allBox.checked; }); syncSel(); };
+  syncSel();
+  const items = (ids) => ids.map((id) => ({ id, dutyDate: byId[id].dutyDate }));
+  const ignore = async (ids) => {
+    const r = await act(ids.length === 1 ? 'Ignore · ' + byId[ids[0]].name : 'Ignore ' + ids.length + ' items', IGNORE_NOTE, '', 'exceptions.ignore', (d) => ({ items: items(ids), reasonCode: d.reasonCode, note: d.note }), 'Ignored');
+    if (r && r.skipped && r.skipped.length) toast(r.skipped.length + ' not changed: ' + r.skipped[0], 'bad');
+    after(r);
+  };
+  const restore = async (ids) => {
+    try { const r = await api('exceptions.restore', { items: items(ids), note: 'Restored to the list' }); toast(r.changed + ' restored' + (r.skipped.length ? ' · ' + r.skipped[0] : '')); after(true); }
+    catch (e) { toast(e.message, 'bad'); }
+  };
+  $$('[data-ignore]', c).forEach((b) => { b.onclick = () => ignore([b.dataset.ignore]); });
+  $$('[data-restore]', c).forEach((b) => { b.onclick = () => restore([b.dataset.restore]); });
+  const bi = $('#bulkIgnore'); if (bi) bi.onclick = () => selected.size && ignore([...selected]);
+  const br = $('#bulkRestore'); if (br) br.onclick = () => selected.size && restore([...selected]);
   $$('[data-a]', c).forEach((b) => {
     b.onclick = async () => {
       const x = byId[b.dataset.x], d = Object.assign({ name: x.name }, dutyById[x.dutyId] || {}), sug = x.suggestion || {}, a = b.dataset.a;

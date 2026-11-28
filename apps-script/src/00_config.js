@@ -1,7 +1,7 @@
 /* ===== 00 Config: app constants and sheet schema ===== */
 var APP = {
   name: 'OutSource Connect',
-  version: '6.0.0',
+  version: '6.1.0',
   tz: 'Asia/Kolkata',
   roles: { ADMIN: 'ADMIN', OPS: 'OPS' }
 };
@@ -24,7 +24,7 @@ var SCHEMA = {
   AuditLog: { log: true, chain: true, cols: [['auditId', 'str'], ['at', 'datetime'], ['username', 'str'], ['action', 'str'], ['entity', 'str'], ['entityId', 'str'], ['reason', 'str'], ['before', 'json'], ['after', 'json'], ['hash', 'str']] },
   MonthLocks: { key: 'lockId', cols: [['lockId', 'str'], ['month', 'str'], ['deptCode', 'str'], ['status', 'str'], ['lockedAt', 'datetime'], ['lockedBy', 'str'], ['unlockedAt', 'datetime'], ['unlockedBy', 'str'], ['unlockReason', 'str']] },
   // ----- Phase 2: tablet, faces, punches -----
-  Devices: { key: 'deviceId', cols: [['deviceId', 'str'], ['name', 'str'], ['active', 'bool'], ['createdAt', 'datetime'], ['createdBy', 'str'], ['revokedAt', 'datetime'], ['revokedBy', 'str'], ['lastSeenAt', 'datetime'], ['appVersion', 'str'], ['battery', 'num'], ['charging', 'bool'], ['queueSize', 'num'], ['cameraOk', 'bool'], ['lastPunchAt', 'datetime'], ['backend', 'str'], ['userAgent', 'str']] },
+  Devices: { key: 'deviceId', cols: [['deviceId', 'str'], ['name', 'str'], ['active', 'bool'], ['createdAt', 'datetime'], ['createdBy', 'str'], ['revokedAt', 'datetime'], ['revokedBy', 'str'], ['lastSeenAt', 'datetime'], ['appVersion', 'str'], ['battery', 'num'], ['charging', 'bool'], ['queueSize', 'num'], ['cameraOk', 'bool'], ['lastPunchAt', 'datetime'], ['backend', 'str'], ['userAgent', 'str'], ['diag', 'json']] },
   Heartbeats: { log: true, cols: [['at', 'datetime'], ['deviceId', 'str'], ['battery', 'num'], ['charging', 'bool'], ['queueSize', 'num'], ['cameraOk', 'bool'], ['appVersion', 'str'], ['note', 'str']] },
   EnrollRequests: { key: 'reqId', cols: [['reqId', 'str'], ['staffId', 'str'], ['mode', 'str'], ['status', 'str'], ['requestedBy', 'str'], ['requestedAt', 'datetime'], ['updatedAt', 'datetime'], ['deviceId', 'str'], ['message', 'str']] },
   FaceData: { key: 'faceId', cols: [['faceId', 'str'], ['staffId', 'str'], ['descriptors', 'json'], ['samples', 'num'], ['quality', 'json'], ['source', 'str'], ['status', 'str'], ['reqId', 'str'], ['createdAt', 'datetime'], ['activatedAt', 'datetime'], ['disabledAt', 'datetime'], ['note', 'str']] },

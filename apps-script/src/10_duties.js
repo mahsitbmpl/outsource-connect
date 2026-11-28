@@ -198,7 +198,7 @@ var DutyEngine = (function () {
     allExc.forEach(function (x) {
       var id = x.type + ':' + x.subject; seen[id] = 1;
       var cur = et.get(id);
-      if (cur && cur.status === 'Resolved') return;
+      if (cur && (cur.status === 'Resolved' || cur.status === 'Ignored')) return; // decided by a person: keep
       et.put({ exceptionId: id, type: x.type, staffId: x.d.staffId, dutyId: x.d.dutyId, dutyDate: x.d.dutyDate, status: 'Open', severity: x.severity, summary: x.summary, suggestion: x.suggestion,
         createdAt: cur ? cur.createdAt : Clock.now(), updatedAt: cur && cur.status === 'Open' && cur.summary === x.summary ? cur.updatedAt : Clock.now(), resolvedBy: '', resolvedAt: '', resolution: '' });
     });

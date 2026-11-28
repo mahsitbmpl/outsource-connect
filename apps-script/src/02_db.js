@@ -73,8 +73,16 @@ var Db = (function () {
   }
 
   function cacheKey(table) { return 'tbl:' + table; }
+  /* Data version: changes after every save, so remembered answers (RESULT_CACHE in 16_speed.js) are never served stale.
+   * Tables that change all the time but do not affect the console pages are left out. */
+  var QUIET_TABLES = ['Sessions', 'LoginLog', 'Heartbeats', 'EmailLog', 'JobLog', 'Devices'];
+  function touch(table) {
+    if (QUIET_TABLES.indexOf(table) >= 0) return;
+    try { CacheService.getScriptCache().put('DATA_VER', String(Date.now()) + Math.random().toString(36).slice(2, 6), 21600); } catch (e) { /* cache unavailable: answers are just not remembered */ }
+  }
   function invalidate(table) {
     delete memo[table];
+    touch(table);
     if (CACHED_TABLES.indexOf(table) >= 0) {
       try { CacheService.getScriptCache().remove(cacheKey(table)); } catch (e) { /* ignore */ }
     }
@@ -176,6 +184,7 @@ var Db = (function () {
     var sh = sheet(table), h = headers(table);
     if (schema(table).chain) withLock(function () { sh.appendRow(chainRows(table, h, [objToRow(table, h, obj)])[0]); });
     else sh.appendRow(objToRow(table, h, obj));
+    touch(table);
   }
   /** Re-checks a chained table: every row's hash must follow from the row before. Returns a short report. */
   function verifyChain(table) {
@@ -253,7 +262,7 @@ var Db = (function () {
   return {
     ss: ss, sheet: sheet, headers: headers, all: all, find: find, where: where, insert: insert,
     insertMany: insertMany, update: update, append: append, tail: tail, deleteWhere: deleteWhere,
-    ensureTable: ensureTable, invalidate: invalidate, reset: reset, fromCell: fromCell, toCell: toCell, verifyChain: verifyChain, rowHash: rowHash, chainHead: chainHead
+    ensureTable: ensureTable, invalidate: invalidate, reset: reset, fromCell: fromCell, toCell: toCell, verifyChain: verifyChain, rowHash: rowHash, chainHead: chainHead, touch: touch
   };
 })();
 

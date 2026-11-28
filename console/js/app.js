@@ -143,7 +143,7 @@ function renderShell() {
   btn.onclick = (e) => {
     e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden));
     const t = timing.last;
-    $('#umTiming').textContent = t ? `Last server reply ${(t.totalMs / 1000).toFixed(1)} s (our code ${(t.serverMs / 1000).toFixed(2)} s, rest is Google start-up and network)` : '';
+    $('#umTiming').textContent = t ? `Last server reply ${(t.totalMs / 1000).toFixed(1)} s for ${t.action} (our code ${(t.serverMs / 1000).toFixed(2)} s${t.cached ? ', from server memory' : ''}; the rest is Google start-up and network)` : '';
   };
   document.addEventListener('click', () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
   $('#umOut').onclick = logout;
@@ -273,7 +273,10 @@ setStaleHandler(() => {
   route();
 });
 function warmUp() {
-  prefetch([['staff.list', { status: 'All' }], ['companies.list'], ['devices.list'], ['punches.byDate', { date: state.boot.today }], ['unrecognised.list', { status: 'All' }], ['exceptions.list', { status: 'Open' }], ['dashboard']]);
+  // one request loads the pages people open most (they then open instantly)
+  const t = state.boot.today;
+  prefetch([['dashboard'], ['exceptions.list', { status: 'Open' }], ['staff.list', { status: 'All' }], ['companies.list'], ['devices.list'], ['punches.range', { from: t, to: t }],
+    ['unrecognised.list', { status: 'Open' }], ['meta.reasonCodes'], ['penalties.list', { month: t.slice(0, 7) }], ['deductions.list', { month: t.slice(0, 7) }]]);
 }
 
 // client-side idle sign-out (the server enforces it too)

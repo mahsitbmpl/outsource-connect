@@ -47,7 +47,7 @@ var Devices = (function () {
       var seen = lastSeen(d), mins = seen ? (Clock.nowMs() - Date.parse(seen)) / 60000 : null;
       return { deviceId: d.deviceId, name: d.name, active: d.active, createdAt: d.createdAt, createdBy: d.createdBy, lastSeenAt: seen, minutesSinceSeen: mins == null ? null : Math.round(mins),
         online: d.active && mins != null && mins <= Settings.int('tabletSilentAlertMinutes'), appVersion: d.appVersion, battery: d.battery, charging: d.charging,
-        queueSize: d.queueSize, cameraOk: d.cameraOk, lastPunchAt: d.lastPunchAt, backend: d.backend };
+        queueSize: d.queueSize, cameraOk: d.cameraOk, lastPunchAt: d.lastPunchAt, backend: d.backend, diag: d.diag || null };
     });
   }
   function create(admin, name) {
@@ -77,6 +77,14 @@ var Devices = (function () {
     var patch = { appVersion: OSC.cleanText(h.appVersion, 20), battery: isFinite(h.battery) ? Math.round(h.battery) : '', charging: !!h.charging,
       queueSize: isFinite(h.queueSize) ? Number(h.queueSize) : '', cameraOk: !!h.cameraOk, backend: OSC.cleanText(h.backend, 20), userAgent: OSC.cleanText(h.userAgent, 200), lastSeenAt: Clock.now() };
     if (h.lastPunchAt) patch.lastPunchAt = String(h.lastPunchAt).slice(0, 30);
+    if (h.diag && typeof h.diag === 'object') {
+      // kiosk 3.1 diagnostics: loop restarts, camera restarts, reloads, recognition speed (shown on the Tablet page)
+      var keep = {};
+      ['uptimeMin', 'loopStalls', 'camRestarts', 'reloadReason', 'recogMs', 'detectMs', 'tensors', 'faces', 'camRes', 'lastLoopSec', 'reloads'].forEach(function (k) {
+        if (h.diag[k] != null) keep[k] = typeof h.diag[k] === 'number' ? Math.round(h.diag[k] * 10) / 10 : OSC.cleanText(String(h.diag[k]), 60);
+      });
+      patch.diag = keep;
+    }
     Db.update('Devices', dev.deviceId, patch);
     var cache = CacheService.getScriptCache(), k = 'hblog:' + dev.deviceId;
     if (!cache.get(k)) {
@@ -359,9 +367,12 @@ var Kiosk = (function () {
     try { bytes = DriveApp.getFileById(fileId).getBlob().getBytes(); } catch (e) { fail('NOT_FOUND', 'This photo was removed after the photo retention period (Settings: photoRetentionDays)'); }
     return { dataUrl: 'data:image/jpeg;base64,' + Utilities.base64Encode(bytes) };
   }
-  function unrecList(status) {
-    return Db.all('UnrecognisedFaces').filter(function (u) { return !status || status === 'All' || u.status === status; })
-      .sort(function (a, b) { return a.at < b.at ? 1 : -1; }).slice(0, 300).map(function (u) { delete u._row; return u; });
+  function unrecList(status, from, to) {
+    from = OSC.parseDate(from); to = OSC.parseDate(to);
+    return Db.all('UnrecognisedFaces').filter(function (u) {
+      var day = String(u.at).slice(0, 10);
+      return (!status || status === 'All' || u.status === status) && (!from || day >= from) && (!to || day <= to);
+    }).sort(function (a, b) { return a.at < b.at ? 1 : -1; }).slice(0, 500).map(function (u) { var o = {}; Object.keys(u).forEach(function (k) { if (k !== '_row') o[k] = u[k]; }); return o; });
   }
   function unrecDismiss(user, unrecId, reason) {
     reason = requireReason(reason);
@@ -405,7 +416,7 @@ ROUTES['face.thumb'] = ['APP', function (u, d) { return Kiosk.thumb(d.staffId); 
 ROUTES['face.summary'] = ['APP', function (u, d) { return Kiosk.faceSummary(d.staffId); }];
 ROUTES['punches.byDate'] = ['APP', function (u, d) { return Kiosk.recentPunches(d.date); }];
 ROUTES['punches.photo'] = ['APP', function (u, d) { return Kiosk.photo(d); }];
-ROUTES['unrecognised.list'] = ['APP', function (u, d) { return Kiosk.unrecList(d.status); }];
+ROUTES['unrecognised.list'] = ['APP', function (u, d) { return Kiosk.unrecList(d.status, d.from, d.to); }];
 ROUTES['unrecognised.dismiss'] = ['APP', function (u, d) { return Kiosk.unrecDismiss(u, d.unrecId, d.reason); }];
 
 // Staff changes that affect the tablet: names, exits, transfers. Wrap the Phase 1 routes.

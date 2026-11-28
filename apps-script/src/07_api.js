@@ -59,18 +59,41 @@ function handle(body) {
   var req;
   try { req = JSON.parse(body || '{}'); } catch (e) { fail('BAD_REQUEST', 'Request is not valid JSON'); }
   if (!req || typeof req.action !== 'string') fail('BAD_REQUEST', 'Missing action');
+  if (req.action === 'batch') return handleBatch(req);
   var route = ROUTES[req.action];
   if (!route) fail('BAD_REQUEST', 'Unknown action ' + req.action);
   var data = req.data && typeof req.data === 'object' ? req.data : {};
   if (route[0] === '*') return route[1](null, data);
   if (route[0] === 'DEVICE') { var dev = Devices.verify(req); return route[1](dev, Devices.payload(req)); }
-  var user = Auth.check(req.token);
+  return runAs(Auth.check(req.token), req.action, data);
+}
+/** Runs one console action for a signed-in user (role checks, then the remembered answer if there is one). */
+function runAs(user, action, data) {
+  var route = ROUTES[action];
+  if (!route || route[0] === '*' || route[0] === 'DEVICE') fail('BAD_REQUEST', 'Unknown action ' + action);
   // A user with a temporary password may only change it or sign out.
-  if (user.mustChange && ['auth.changePassword', 'auth.logout', 'auth.me'].indexOf(req.action) < 0)
+  if (user.mustChange && ['auth.changePassword', 'auth.logout', 'auth.me'].indexOf(action) < 0)
     fail('MUST_CHANGE_PASSWORD', 'Please set a new password first');
   if (route[0] === 'ADMIN' && user.role !== APP.roles.ADMIN) fail('FORBIDDEN', 'Only the Admin can do this');
   if (route[0] === 'APP' && [APP.roles.ADMIN, APP.roles.OPS].indexOf(user.role) < 0) fail('FORBIDDEN', 'Not allowed');
+  if (typeof Speed !== 'undefined' && Speed.cacheable(action)) return Speed.remembered(user, action, data, function () { return route[1](user, data); });
   return route[1](user, data);
+}
+/** Several console reads in one request (saves Google's start-up time for each). Each item answers on its own. */
+function handleBatch(req) {
+  var items = Array.isArray(req.items) ? req.items : [];
+  if (!items.length || items.length > 15) fail('BAD_REQUEST', 'A batch holds 1 to 15 requests');
+  var user = Auth.check(req.token);
+  return items.map(function (it) {
+    try {
+      if (!it || typeof it.action !== 'string' || it.action === 'batch') fail('BAD_REQUEST', 'Missing action');
+      return { ok: true, data: runAs(user, it.action, it.data && typeof it.data === 'object' ? it.data : {}) };
+    } catch (e) {
+      if (e && e.name === 'AppError') return { ok: false, error: { code: e.code, message: e.message, fields: e.fields } };
+      console.error(e && e.stack ? e.stack : e);
+      return { ok: false, error: { code: 'INTERNAL', message: 'Something went wrong on the server. Please try again; if it repeats, tell the Admin.' } };
+    }
+  });
 }
 
 function respond(obj) {
@@ -79,6 +102,7 @@ function respond(obj) {
 }
 
 function apiCall(body) {
+  if (typeof Speed !== 'undefined') Speed.lastHit = false;
   try {
     return { ok: true, data: handle(body) };
   } catch (e) {
@@ -92,6 +116,7 @@ function doPost(e) {
   var t0 = Date.now();
   var out = apiCall(e && e.postData ? e.postData.contents : '');
   out.ms = Date.now() - t0; // time our code used; the rest of the wait is Google starting the script
+  if (typeof Speed !== 'undefined' && Speed.lastHit) out.cached = true;
   return respond(out);
 }
 function doGet() { return respond({ ok: true, data: { app: APP.name, version: APP.version, status: 'running' } }); }

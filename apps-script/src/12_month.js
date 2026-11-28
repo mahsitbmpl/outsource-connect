@@ -44,6 +44,9 @@ var MonthEnd = (function () {
       return { staffId: x.staffId, date: x.dutyDate, h8: sp.h8, h4: sp.h4, dd: sp.dd, billable: x.billable, pending: x.pending, open: x.open,
         designation: d.designation || '', companyId: d.companyId || '', ratePerDuty: d.ratePerDuty, gstPct: d.gstPct };
     });
+    // items the Ops manager chose to ignore: an ignored Missing IN/OUT no longer holds the lock, ignored hours over 12 are not billed
+    var ign = Extras.ignoredFor(from, to);
+    days.forEach(function (x) { var k = ign[x.staffId + ':' + x.date]; if (!k) return; if (k.MISSING_OUT || k.MISSING_IN) x.open = false; if (k.LONG_DUTY) x.pending = 0; });
     // who belonged to this department (and which company) on each date
     var members = {};
     Db.all('Staff').forEach(function (s) {
