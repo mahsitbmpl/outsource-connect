@@ -59,11 +59,12 @@ if (process.argv.includes('--month')) {
   open.filter((x) => x.type === 'LATE_GRACE').forEach((x) => { env.newRequest(); env.ctx.Actions.grace(sys, { dutyId: x.dutyId, dutyDate: x.dutyDate, choice: 'strict', reasonCode: 'Other', note: 'Demo decision' }); });
   env.newRequest();
   const short = env.ctx.DutyEngine.exceptions('Open').filter((x) => x.type === 'SHORT_DUTY');
-  short.forEach((x) => { env.newRequest(); env.ctx.Actions.reviewShort(sys, { staffId: x.staffId, date: x.dutyDate, reasonCode: 'Other', note: 'Demo review' }); });
+  short.forEach((x, i) => { if (i < 4) return; env.newRequest(); env.ctx.Actions.reviewShort(sys, { staffId: x.staffId, date: x.dutyDate, reasonCode: 'Other', note: 'Demo review' }); });
   env.newRequest();
   [['HK', 3000, 'Grooming and punctuality'], ['HK', 3000, 'Phone usage on duty'], ['SS', 2000, 'Late reporting of supervisor']].forEach(([d, a, r], k) => { env.newRequest(); env.ctx.Actions.addPenalty(sys, { date: ym + '-' + String(5 + k * 6).padStart(2, '0'), deptCode: d, amount: a, reason: r }); });
   env.newRequest(); env.ctx.Actions.addDeduction(sys, { date: ym + '-10', staffId: 'HK002', hours: 4, reason: 'Left duty without relief' });
   env.newRequest(); env.ctx.Settings.update(sys, 'emailTo', 'ops@example.com', 'Demo');
+  env.newRequest(); [1, 2, 3, 4].forEach((k) => env.ctx.Db.insert('UnrecognisedFaces', { unrecId: 'UDEMO' + k, at: ym + '-' + String(10 + k).padStart(2, '0') + 'T08:0' + k + ':00+05:30', status: 'Open', photoFileId: '', bestStaffId: 'HK00' + k, bestDistance: 0.55 }));
   env.newRequest(); console.log('open items after demo decisions:', env.ctx.DutyEngine.exceptions('Open').length, 'month', ym);
 }
 setInterval(() => env.setNow(new Date().toISOString()), 1000);

@@ -121,7 +121,9 @@ function makeEnv(opts) {
       getScriptCache: () => ({
         get: (k) => (cacheStore.has(k) ? cacheStore.get(k) : null),
         put: (k, v) => { if (String(v).length > 100000) throw new Error('cache value too large'); cacheStore.set(k, String(v)); },
-        remove: (k) => { cacheStore.delete(k); }
+        remove: (k) => { cacheStore.delete(k); },
+        getAll: (keys) => { const o = {}; keys.forEach((k) => { if (cacheStore.has(k)) o[k] = cacheStore.get(k); }); return o; },
+        putAll: (obj) => { Object.keys(obj).forEach((k) => { if (String(obj[k]).length > 100000) throw new Error('cache value too large'); cacheStore.set(k, String(obj[k])); }); }
       })
     },
     ScriptApp: (() => { const trig = []; return { triggers: trig, getProjectTriggers: () => trig.slice(), deleteTrigger: (t) => { trig.splice(trig.indexOf(t), 1); },
@@ -140,8 +142,10 @@ function makeEnv(opts) {
       computeHmacSha256Signature: (value, key) => toSigned(crypto.createHmac('sha256', toBuf(key)).update(toBuf(value)).digest()),
       base64EncodeWebSafe: (bytes) => toBuf(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
       base64DecodeWebSafe: (s) => toSigned(Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
-      newBlob: (s, mime, name) => { const b = { mime, name, getName: () => b.name, setName: (n) => { b.name = n; return b; }, getContentType: () => mime, getBytes: () => (Array.isArray(s) ? s.slice() : toSigned(Buffer.from(String(s), 'utf8'))) }; return b; },
+      newBlob: (s, mime, name) => { const b = { mime, name, getName: () => b.name, setName: (n) => { b.name = n; return b; }, getContentType: () => mime, getBytes: () => (Array.isArray(s) ? s.slice() : toSigned(Buffer.from(String(s), 'utf8'))), getDataAsString: () => (Array.isArray(s) ? toBuf(s).toString('utf8') : String(s)) }; return b; },
       base64Decode: (s) => toSigned(Buffer.from(s, 'base64')),
+      gzip: (blob) => { const z = toSigned(require('zlib').gzipSync(toBuf(blob.getBytes()))); return { getBytes: () => z.slice() }; },
+      ungzip: (blob) => { const raw = require('zlib').gunzipSync(toBuf(blob.getBytes())); return { getBytes: () => toSigned(raw), getDataAsString: () => raw.toString('utf8') }; },
       base64Encode: (bytes) => toBuf(bytes).toString('base64')
     },
     Date, Math, JSON, Object, Array, String, Number, Boolean, RegExp, Error, isFinite, isNaN, parseInt, parseFloat

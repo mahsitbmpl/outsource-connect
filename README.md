@@ -10,7 +10,7 @@ Zero-cost face-punch attendance and billing for the outsourced staff (Housekeepi
 Designed and developed by IT Department, Marengo Asia Hospital, Surat.
 
 ## Status
-All 6 build phases done (version 6.0.0): data and sign-in, tablet kiosk, rules engine, dashboard and exceptions,
+All 6 build phases done (version 6.1.0; see docs/UPDATE_6.1.md for the latest changes): data and sign-in, tablet kiosk, rules engine, dashboard and exceptions,
 month-end pack and bills, emails and automation, and go-live hardening (tamper check, system health, archive, restore, parallel-run check).
 Next: deploy 6.0.0, restore drill, one-month parallel run, then go live (`docs/GO_LIVE_CHECKLIST.md`).
 

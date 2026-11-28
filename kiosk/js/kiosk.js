@@ -4,7 +4,7 @@ import * as net from './net.js';
 import * as cam from './face.js';
 
 const L = window.KioskLogic, OSC = window.OSC;
-const VERSION = '3.0.0';
+const VERSION = '3.1.0';
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -28,8 +28,17 @@ const LIMITS = { minFaceRatio: 0.2, maxFaceRatio: 0.65, maxYaw: 0.14, maxRoll: 1
 const S = {
   mode: 'loading', people: [], byId: {}, gallery: [], last: {}, config: null, facesVersion: null, enroll: null,
   live: L.Liveness(), consensus: L.Consensus(2, 3), presenceAt: 0, lostAt: 0, unknown: 0, lastUnrecAt: 0, cooldown: {},
-  resultUntil: 0, camFails: 0, audio: null, wake: null, backend: '', lastPunchAt: ''
+  resultUntil: 0, camFails: 0, audio: null, wake: null, backend: '', lastPunchAt: '',
+  // self-repair (v3.1): the loop and the camera are watched; the app restarts itself quietly when needed
+  loopAt: 0, lastFaceAt: 0, stallsInRow: 0, needReload: '', tensorBase: 0, hiddenAt: 0, visibleAt: 0, detectBase: 0,
+  diag: { loopStalls: 0, camRestarts: 0, reloadReason: '' }
 };
+try { const r = JSON.parse(localStorage.getItem('osc.k.reload') || 'null'); if (r) S.diag.reloadReason = r.reason + ' at ' + new Date(r.at + 19800000).toISOString().slice(11, 16); } catch (e) { /* none */ }
+/** Restarts the app (quick: everything is cached on the tablet) and remembers why, for the Tablet page in the console. */
+function restartApp(reason) {
+  try { localStorage.setItem('osc.k.reload', JSON.stringify({ reason, at: Date.now() })); } catch (e) { /* ignore */ }
+  location.reload();
+}
 
 // ---------- screens ----------
 const app = () => $('#app');
@@ -51,7 +60,7 @@ function statusChip() {
 function showIdle() {
   setMode('idle');
   app().innerHTML = `<div class="k-idle"><div class="k-idle-c" id="drift"><b data-clockshort>${clockParts().short}</b><span>${esc(TXT.look[0])} · <span class="hi">${esc(TXT.look[1])}</span></span></div>
-    <div class="k-idle-dot">${S.audio && S.audio.state !== 'running' ? '<span>Tap screen once to turn on sound</span>' : ''}<span data-q></span><span>${navigator.onLine ? 'online' : 'offline'}</span></div></div>`;
+    <div class="k-idle-dot">${S.audio && S.audio.state !== 'running' ? '<span>Tap screen once to turn on sound</span>' : ''}<span data-q></span><span>${navigator.onLine ? 'online' : 'offline'}</span><span>v${VERSION}</span></div></div>`;
   driftClock();
 }
 function showScan(promptKey) {
@@ -148,14 +157,15 @@ async function tick() {
   if (S.mode === 'setup' || S.mode === 'loading' || S.mode === 'error') return;
   if (S.mode === 'result') { if (performance.now() < S.resultUntil) return; showScan('look'); }
   if (S.enroll) return enrollTick();
-  const f = await cam.closestFace();
+  const f = await cam.closestFace(S.mode === 'idle');
+  if (f) S.lastFaceAt = performance.now();
   const minRatio = (S.config ? S.config.minFacePct : 16) / 100;
   if (!f || f.widthRatio < minRatio * 0.6) {
     if (S.mode === 'scan') { if (!S.lostAt) S.lostAt = performance.now(); if (performance.now() - S.lostAt > 1500) showIdle(); }
     return;
   }
   S.lostAt = 0;
-  if (S.mode !== 'scan') { showScan('look'); resetPresence(); }
+  if (S.mode !== 'scan') { showScan('look'); resetPresence(); return; } // next round looks again with the full detector
   if (f.widthRatio < minRatio) { showScan('closer'); return; }
   const cfg = S.config || {};
   if (cfg.liveness && !S.live.passed()) {
@@ -294,19 +304,49 @@ async function heartbeat() {
   try { if (navigator.getBattery) { const b = await navigator.getBattery(); battery = Math.round(b.level * 100); charging = b.charging; } } catch (e) { /* not available */ }
   try {
     await net.call('kiosk.heartbeat', { battery, charging, queueSize: await queue.count(), cameraOk: cam.cameraOk(), appVersion: VERSION, backend: S.backend,
-      lastPunchAt: S.lastPunchAt, userAgent: navigator.userAgent.slice(0, 180) });
+      lastPunchAt: S.lastPunchAt, userAgent: navigator.userAgent.slice(0, 180),
+      diag: { uptimeMin: performance.now() / 60000, loopStalls: S.diag.loopStalls, camRestarts: S.diag.camRestarts, reloadReason: S.diag.reloadReason, recogMs: cam.stats.recogMs,
+        detectMs: cam.stats.detectMs, tensors: cam.tensors(), faces: S.gallery.length, camRes: cam.stats.camRes, lastLoopSec: S.loopAt ? (performance.now() - S.loopAt) / 1000 : null } });
   } catch (e) { handleNetError(e); }
 }
 async function watchdog() {
+  if (document.visibilityState !== 'visible') return; // the screen is off: nothing to check
+  const now = performance.now();
+  // 1. the face loop must keep going round (it can get stuck inside the graphics chip after the screen sleeps)
+  if (S.loopAt && now - S.loopAt > 20000 && now - S.visibleAt > 20000 && S.mode !== 'setup' && S.mode !== 'error') return restartApp('face loop stopped');
+  // 2. the camera must deliver moving pictures
   if (cam.cameraOk()) { S.camFails = 0; return; }
   S.camFails++;
-  try { await cam.startCamera($('#cam')); } catch (e) { /* retry next time */ }
-  if (S.camFails >= 3) location.reload();
+  if (S.camFails >= 2) {
+    S.diag.camRestarts++;
+    try { await cam.startCamera($('#cam')); } catch (e) { /* retry next time */ }
+  }
+  if (S.camFails >= 5) restartApp('camera not delivering pictures');
 }
 function everyMinute() {
   const c = new Date(net.serverNow() + 19800000), hm = OSC.pad(c.getUTCHours()) + ':' + OSC.pad(c.getUTCMinutes());
-  if (S.config && hm === S.config.reloadTime && (S.mode === 'idle' || S.mode === 'scan') && !S.enroll && performance.now() > 120000) location.reload();
+  const quiet = (S.mode === 'idle' || S.mode === 'scan') && !S.enroll && performance.now() > 120000 && performance.now() - S.lastFaceAt > 120000;
+  if (S.config && hm === S.config.reloadTime && quiet) return restartApp('daily refresh');
+  // memory slowly filling up inside the face models: refresh when nobody is at the tablet
+  const n = cam.tensors();
+  if (S.tensorBase && n > S.tensorBase + 400) S.needReload = S.needReload || 'memory clean-up';
+  // recognition became much slower than when the app started (graphics chip tired): refresh when nobody is in front
+  const det = cam.stats.detectMs;
+  if (!S.detectBase && performance.now() > 300000 && det) S.detectBase = det;
+  if (S.detectBase && det > Math.max(400, 3 * S.detectBase)) S.needReload = S.needReload || 'recognition slowed down';
+  if (S.needReload && quiet) return restartApp(S.needReload);
   driftClock();
+}
+/** Screen back on, or the app brought to the front again: wake the camera and the loop. */
+async function resume(why) {
+  if (document.visibilityState !== 'visible' || !started) return;
+  keepAwake();
+  S.loopAt = performance.now(); S.visibleAt = S.loopAt; S.camFails = 0;
+  const hiddenFor = S.hiddenAt ? performance.now() - S.hiddenAt : 0; S.hiddenAt = 0;
+  await cam.resumeVideo();
+  if (!cam.cameraOk() || hiddenFor > 60000) { S.diag.camRestarts++; try { await cam.startCamera($('#cam')); } catch (e) { /* watchdog retries */ } }
+  if (!S.enroll && S.mode !== 'setup' && S.mode !== 'error') { resetPresence(); showIdle(); }
+  void why;
 }
 function driftClock() { const d = $('#drift'); if (d) d.style.transform = `translate(${Math.round((Math.random() - 0.5) * 30)}vw, ${Math.round((Math.random() - 0.5) * 30)}vh)`; }
 function tickClock() {
@@ -315,7 +355,12 @@ function tickClock() {
   document.querySelectorAll('[data-clockshort]').forEach((el) => { el.textContent = c.short; });
 }
 async function keepAwake() {
-  try { if ('wakeLock' in navigator && document.visibilityState === 'visible') S.wake = await navigator.wakeLock.request('screen'); } catch (e) { /* not allowed now */ }
+  try {
+    if ('wakeLock' in navigator && document.visibilityState === 'visible' && (!S.wake || S.wake.released)) {
+      S.wake = await navigator.wakeLock.request('screen');
+      S.wake.addEventListener('release', () => { if (document.visibilityState === 'visible') setTimeout(keepAwake, 1000); });
+    }
+  } catch (e) { /* not allowed now */ }
 }
 
 // ---------- start ----------
@@ -327,6 +372,9 @@ async function start() {
     S.backend = await cam.loadModels((n) => showLoading(n + 1, 6, 'Loading face models'));
     showLoading(5, 6, 'Starting camera');
     await cam.startCamera($('#cam'));
+    await cam.warmUp();
+    S.tensorBase = cam.tensors();
+    cam.onGraphicsLost(() => restartApp('graphics reset by the tablet'));
   } catch (e) {
     started = false;
     return showFatal(e && e.name === 'NotAllowedError' ? 'Camera permission is blocked. Allow the camera for this site in Chrome settings.' : 'Could not start: ' + (e.message || e));
@@ -346,18 +394,30 @@ async function start() {
   heartbeat(); flushSoon(); poll();
   for (;;) {
     const t0 = performance.now();
-    try { await tick(); } catch (e) { console.error(e); }
+    S.loopAt = t0;
+    if (document.visibilityState !== 'visible') { await sleep(1000); continue; } // screen off: rest, resume() wakes the camera
+    // one round must not take more than 8 seconds; a stuck round is abandoned (twice in a row = restart the app)
+    const r = await Promise.race([tick().then(() => 'ok', (e) => { console.error(e); return 'error'; }), sleep(8000).then(() => 'stuck')]);
+    if (r === 'stuck') {
+      S.diag.loopStalls++; S.stallsInRow++;
+      if (S.stallsInRow >= 2) { restartApp('face loop stuck'); return; }
+      try { await cam.startCamera($('#cam')); S.diag.camRestarts++; } catch (e) { /* watchdog retries */ }
+      continue;
+    }
+    S.stallsInRow = 0;
     const wait = S.mode === 'idle' ? 450 : 40;
     await sleep(Math.max(10, wait - (performance.now() - t0)));
   }
 }
 
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume('visible'); else S.hiddenAt = performance.now(); });
+window.addEventListener('pageshow', (e) => { if (e.persisted) resume('pageshow'); });
+window.addEventListener('focus', () => { if (S.loopAt && performance.now() - S.loopAt > 5000) resume('focus'); });
 document.addEventListener('pointerdown', unlockAudio, { passive: true });
 window.addEventListener('online', () => { flushSoon(); poll(); });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-window.__kiosk = { S, showResult, showIdle, showScan, showSetup, t2, VERSION }; // used by the automated screen test
+window.__kiosk = { S, showResult, showIdle, showScan, showSetup, t2, VERSION, face: cam.testHooks }; // used by the automated screen test
 
 (async function boot() {
   const c = await net.loadCreds();

@@ -1,5 +1,5 @@
 /* Kiosk service worker: everything (app, fonts, face models) is cached so the tablet works offline. API calls are never cached. */
-const VERSION = 'osc-kiosk-3.0.0';
+const VERSION = 'osc-kiosk-3.1.0';
 const FILES = [
   'config.js',
   'css/kiosk.css',

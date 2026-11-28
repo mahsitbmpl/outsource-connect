@@ -44,7 +44,7 @@ async def main():
         await page.screenshot(path=f'{SHOTS}/e2e_2_home.png', full_page=True)
         # staff list (demo data)
         await page.click('a[href="#/staff"]')
-        await page.wait_for_selector('table.t tbody tr')
+        await page.wait_for_selector('#cnt'); await page.wait_for_selector('table.t tbody tr')
         n = await page.locator('table.t tbody tr').count()
         assert n == 30, n
         await page.fill('#q', 'HK01')
